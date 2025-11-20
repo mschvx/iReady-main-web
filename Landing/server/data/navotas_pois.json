@@ -1,0 +1,352 @@
+[
+  {
+    "id": "navotas-01",
+    "name": "Navotas City Hall",
+    "lat": 14.43620,
+    "lon": 120.93090,
+    "keywords": ["city hall", "government", "muni", "navotas"]
+  },
+  {
+    "id": "navotas-02",
+    "name": "Navotas Fish Port Complex",
+    "lat": 14.43410,
+    "lon": 120.92970,
+    "keywords": ["fish port", "port", "market", "navotas"]
+  },
+  {
+    "id": "navotas-03",
+    "name": "Navotas City Public Market",
+    "lat": 14.43490,
+    "lon": 120.93240,
+    "keywords": ["market", "public market", "navotas"]
+  },
+  {
+    "id": "navotas-04",
+    "name": "Tanza Barangay Hall",
+    "lat": 14.42780,
+    "lon": 120.93420,
+    "keywords": ["tanza", "barangay hall", "navotas"]
+  },
+  {
+    "id": "navotas-05",
+    "name": "Bangculasi Barangay Center",
+    "lat": 14.43800,
+    "lon": 120.93610,
+    "keywords": ["bangculasi", "barangay", "navotas"]
+  },
+  {
+    "id": "navotas-06",
+    "name": "Tangos North Barangay Hall",
+    "lat": 14.44450,
+    "lon": 120.92900,
+    "keywords": ["tangos north", "barangay", "navotas"]
+  },
+  {
+    "id": "navotas-07",
+    "name": "Tangos South Barangay Hall",
+    "lat": 14.43450,
+    "lon": 120.92180,
+    "keywords": ["tangos south", "barangay", "navotas"]
+  },
+  {
+    "id": "navotas-08",
+    "name": "Daanghari Bridge",
+    "lat": 14.43190,
+    "lon": 120.92290,
+    "keywords": ["daanghari", "bridge", "navotas"]
+  },
+  {
+    "id": "navotas-09",
+    "name": "North Bay Boulevard North (NBBD)",
+    "lat": 14.43910,
+    "lon": 120.93150,
+    "keywords": ["north bay", "boulevard", "nbbd", "navotas"]
+  },
+  {
+    "id": "navotas-10",
+    "name": "North Bay Boulevard South",
+    "lat": 14.43100,
+    "lon": 120.93320,
+    "keywords": ["north bay", "boulevard south", "navotas"]
+  },
+  {
+    "id": "navotas-11",
+    "name": "San Jose Barangay Hall",
+    "lat": 14.44080,
+    "lon": 120.93570,
+    "keywords": ["san jose", "barangay", "navotas"]
+  },
+  {
+    "id": "navotas-12",
+    "name": "Navotas City Hospital",
+    "lat": 14.43560,
+    "lon": 120.92740,
+    "keywords": ["hospital", "clinic", "navotas city hospital"]
+  },
+  {
+    "id": "navotas-13",
+    "name": "Navotas Polytechnic College",
+    "lat": 14.43270,
+    "lon": 120.93680,
+    "keywords": ["college", "navotas polytechnic", "education", "navotas"]
+  },
+  {
+    "id": "navotas-14",
+    "name": "Navotas Center Mall",
+    "lat": 14.43730,
+    "lon": 120.92860,
+    "keywords": ["mall", "shopping", "navotas center"]
+  },
+  {
+    "id": "navotas-15",
+    "name": "Navotas River Mouth",
+    "lat": 14.42640,
+    "lon": 120.92650,
+    "keywords": ["river", "mouth", "navotas river"]
+  },
+  {
+    "id": "navotas-16",
+    "name": "Navotas Bus Terminal",
+    "lat": 14.43380,
+    "lon": 120.93110,
+    "keywords": ["bus terminal", "transport", "navotas"]
+  },
+  {
+    "id": "navotas-17",
+    "name": "Navotas Police Station",
+    "lat": 14.43890,
+    "lon": 120.93190,
+    "keywords": ["police", "pnp", "station", "navotas"]
+  },
+  {
+    "id": "navotas-18",
+    "name": "Navotas Public Library",
+    "lat": 14.43310,
+    "lon": 120.93520,
+    "keywords": ["library", "public library", "navotas"]
+  },
+  {
+    "id": "navotas-19",
+    "name": "Navotas City Disaster Risk Reduction Office",
+    "lat": 14.43500,
+    "lon": 120.93350,
+    "keywords": ["drrm", "disaster", "office", "navotas"]
+  },
+  {
+    "id": "navotas-20",
+    "name": "Navotas City Sports Complex",
+    "lat": 14.44120,
+    "lon": 120.92940,
+    "keywords": ["sports complex", "stadium", "navotas"]
+  },
+  {
+    "id": "navotas-21",
+    "name": "Navotas Youth Center",
+    "lat": 14.43940,
+    "lon": 120.92480,
+    "keywords": ["youth center", "community", "navotas"]
+  },
+  {
+    "id": "navotas-22",
+    "name": "Navotas Coastal Road",
+    "lat": 14.42790,
+    "lon": 120.92930,
+    "keywords": ["coastal", "road", "navotas"]
+  },
+  {
+    "id": "navotas-23",
+    "name": "Navotas Fish Port Market",
+    "lat": 14.43450,
+    "lon": 120.92820,
+    "keywords": ["fish market", "market", "navotas"]
+  },
+  {
+    "id": "navotas-24",
+    "name": "Navotas Municipal Cemetery",
+    "lat": 14.44610,
+    "lon": 120.93360,
+    "keywords": ["cemetery", "memorial", "navotas"]
+  },
+  {
+    "id": "navotas-25",
+    "name": "Navotas Elementary School",
+    "lat": 14.43670,
+    "lon": 120.92550,
+    "keywords": ["elementary", "school", "education", "navotas"]
+  },
+  {
+    "id": "navotas-26",
+    "name": "Navotas High School",
+    "lat": 14.43360,
+    "lon": 120.93710,
+    "keywords": ["high school", "school", "education", "navotas"]
+  },
+  {
+    "id": "navotas-27",
+    "name": "North Harbor - Navotas Access",
+    "lat": 14.42990,
+    "lon": 120.94220,
+    "keywords": ["north harbor", "harbor", "port", "navotas"]
+  },
+  {
+    "id": "navotas-28",
+    "name": "Navotas Health Center 1",
+    "lat": 14.43050,
+    "lon": 120.93380,
+    "keywords": ["health center", "clinic", "navotas"]
+  },
+  {
+    "id": "navotas-29",
+    "name": "Navotas Health Center 2",
+    "lat": 14.43820,
+    "lon": 120.92620,
+    "keywords": ["health center", "clinic", "navotas"]
+  },
+  {
+    "id": "navotas-30",
+    "name": "Navotas Covered Court (Tanza)",
+    "lat": 14.42830,
+    "lon": 120.93560,
+    "keywords": ["covered court", "sports", "tanza", "navotas"]
+  },
+  {
+    "id": "navotas-31",
+    "name": "Navotas Elementary Annex",
+    "lat": 14.43420,
+    "lon": 120.93390,
+    "keywords": ["school annex", "elementary", "navotas"]
+  },
+  {
+    "id": "navotas-32",
+    "name": "Navotas Slaughterhouse",
+    "lat": 14.43200,
+    "lon": 120.92340,
+    "keywords": ["slaughterhouse", "market", "navotas"]
+  },
+  {
+    "id": "navotas-33",
+    "name": "Barangay Daanghari Health Post",
+    "lat": 14.43340,
+    "lon": 120.92100,
+    "keywords": ["health post", "daanghari", "navotas"]
+  },
+  {
+    "id": "navotas-34",
+    "name": "Navotas Marina Terminal",
+    "lat": 14.42560,
+    "lon": 120.92790,
+    "keywords": ["marina", "terminal", "ferry", "navotas"]
+  },
+  {
+    "id": "navotas-35",
+    "name": "Navotas Police Station 2",
+    "lat": 14.44180,
+    "lon": 120.93500,
+    "keywords": ["police", "pnp", "station", "navotas"]
+  },
+  {
+    "id": "navotas-36",
+    "name": "Navotas Senior Citizens Center",
+    "lat": 14.43710,
+    "lon": 120.93690,
+    "keywords": ["senior", "community", "center", "navotas"]
+  },
+  {
+    "id": "navotas-37",
+    "name": "Navotas Waterworks Facility",
+    "lat": 14.43140,
+    "lon": 120.92670,
+    "keywords": ["waterworks", "facility", "navotas"]
+  },
+  {
+    "id": "navotas-38",
+    "name": "Navotas Fire Station",
+    "lat": 14.43590,
+    "lon": 120.93130,
+    "keywords": ["fire station", "bfp", "navotas"]
+  },
+  {
+    "id": "navotas-39",
+    "name": "Navotas Post Office",
+    "lat": 14.43690,
+    "lon": 120.93280,
+    "keywords": ["post office", "mail", "navotas"]
+  },
+  {
+    "id": "navotas-40",
+    "name": "Navotas Barangay Emergency Evacuation Center",
+    "lat": 14.43990,
+    "lon": 120.93840,
+    "keywords": ["evacuation", "center", "evac", "navotas"]
+  },
+  {
+    "id": "navotas-41",
+    "name": "Navotas Night Market",
+    "lat": 14.43520,
+    "lon": 120.92910,
+    "keywords": ["night market", "market", "navotas"]
+  },
+  {
+    "id": "navotas-42",
+    "name": "Navotas Coastal Evacuation Route",
+    "lat": 14.42680,
+    "lon": 120.93220,
+    "keywords": ["evacuation", "route", "coastal", "navotas"]
+  },
+  {
+    "id": "navotas-43",
+    "name": "Navotas Community Health Center",
+    "lat": 14.43300,
+    "lon": 120.92600,
+    "keywords": ["community health", "clinic", "navotas"]
+  },
+  {
+    "id": "navotas-44",
+    "name": "Navotas Drainage Pump Station",
+    "lat": 14.43090,
+    "lon": 120.94010,
+    "keywords": ["pump station", "drainage", "navotas"]
+  },
+  {
+    "id": "navotas-45",
+    "name": "Navotas Logistics Hub",
+    "lat": 14.42720,
+    "lon": 120.93660,
+    "keywords": ["logistics", "hub", "warehouse", "navotas"]
+  },
+  {
+    "id": "navotas-46",
+    "name": "Navotas Barangay Hall - Northbay",
+    "lat": 14.43860,
+    "lon": 120.92290,
+    "keywords": ["northbay", "barangay hall", "navotas"]
+  },
+  {
+    "id": "navotas-47",
+    "name": "Navotas Water Distribution Center",
+    "lat": 14.43230,
+    "lon": 120.93870,
+    "keywords": ["water distribution", "center", "navotas"]
+  },
+  {
+    "id": "navotas-48",
+    "name": "Navotas Coastal Protection Park",
+    "lat": 14.42480,
+    "lon": 120.93040,
+    "keywords": ["park", "coastal", "green", "navotas"]
+  },
+  {
+    "id": "navotas-49",
+    "name": "Navotas Ferry Landing",
+    "lat": 14.42520,
+    "lon": 120.93580,
+    "keywords": ["ferry", "landing", "terminal", "navotas"]
+  },
+  {
+    "id": "navotas-50",
+    "name": "Navotas Community Evacuation Center - Tanza",
+    "lat": 14.42900,
+    "lon": 120.93920,
+    "keywords": ["evacuation", "tanza", "center", "navotas"]
+  }
+]

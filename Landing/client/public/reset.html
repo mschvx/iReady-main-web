@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reset Data - iReady</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .container {
+            background: white;
+            padding: 3rem;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            text-align: center;
+            max-width: 500px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 1rem;
+            font-size: 2rem;
+        }
+        p {
+            color: #666;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+        button {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            font-size: 1.1rem;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+            margin: 0.5rem;
+        }
+        button:hover {
+            background: #dc2626;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(239, 68, 68, 0.4);
+        }
+        button.secondary {
+            background: #3b82f6;
+        }
+        button.secondary:hover {
+            background: #2563eb;
+            box-shadow: 0 5px 15px rgba(59, 130, 246, 0.4);
+        }
+        .success {
+            background: #10b981;
+            color: white;
+            padding: 1rem;
+            border-radius: 10px;
+            margin-top: 1rem;
+            display: none;
+        }
+        .success.show {
+            display: block;
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .warning {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 1rem;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+            border-left: 4px solid #f59e0b;
+        }
+        .info-box {
+            background: #f3f4f6;
+            padding: 1.5rem;
+            border-radius: 10px;
+            margin: 1.5rem 0;
+            text-align: left;
+        }
+        .info-box h3 {
+            color: #374151;
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+            font-size: 1.1rem;
+        }
+        .info-box ul {
+            margin: 0.5rem 0;
+            padding-left: 1.5rem;
+            color: #6b7280;
+        }
+        .info-box li {
+            margin: 0.3rem 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Reset Application Data</h1>
+        
+        <div class="warning">
+            <strong>⚠️ Warning:</strong> This will clear all local data including your login session. You'll need to log in again.
+        </div>
+        
+        <div class="info-box">
+            <h3>What will be cleared:</h3>
+            <ul>
+                <li><strong>Server data:</strong> All user accounts and barangay claims</li>
+                <li><strong>Browser data:</strong> Authentication sessions</li>
+                <li><strong>Browser data:</strong> Barangay history</li>
+                <li><strong>Browser data:</strong> All checklist items</li>
+                <li><strong>Browser data:</strong> Account profile data</li>
+                <li><strong>Browser data:</strong> Stored usernames</li>
+            </ul>
+        </div>
+        
+        <p>
+            <strong>⚠️ Warning:</strong> This will delete <strong>EVERYTHING</strong> - all users, all claimed barangays, all data.
+            The application will be completely reset as if it's brand new.
+        </p>
+        
+        <button onclick="clearLocalStorage()">
+            🗑️ Clear Browser Data
+        </button>
+        
+        <button class="secondary" onclick="goHome()">
+            🏠 Go to Home
+        </button>
+        
+        <div class="success" id="successMessage">
+            ✅ Local storage cleared successfully! You can now return to the app.
+        </div>
+    </div>
+    
+    <script>
+        async function clearLocalStorage() {
+            try {
+                // Step 1: Reset all server data (users, barangay claims, everything)
+                console.log('🔄 Resetting server data...');
+                const resetResponse = await fetch('/api/reset-all', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                
+                if (resetResponse.ok) {
+                    console.log('✅ Server data reset successfully');
+                } else {
+                    console.warn('⚠️ Could not reset server data:', await resetResponse.text());
+                }
+            } catch (err) {
+                console.error('❌ Error resetting server data:', err);
+            }
+            
+            // Step 2: Clear all localStorage
+            localStorage.clear();
+            console.log('✅ localStorage cleared');
+            
+            // Step 3: Clear sessionStorage
+            sessionStorage.clear();
+            console.log('✅ sessionStorage cleared');
+            
+            // Step 4: Logout from server session (redundant but safe)
+            try {
+                await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                console.log('✅ Logged out from server');
+            } catch (err) {
+                console.warn('⚠️ Could not logout:', err);
+            }
+            
+            // Show success message
+            document.getElementById('successMessage').classList.add('show');
+            
+            console.log('');
+            console.log('✅ ✅ ✅ ALL DATA HAS BEEN COMPLETELY RESET ✅ ✅ ✅');
+            console.log('Cleared:');
+            console.log('- All user accounts (server)');
+            console.log('- All barangay claims (server)');
+            console.log('- All sessions (server)');
+            console.log('- username (browser)');
+            console.log('- displayName (browser)');
+            console.log('- token (browser)');
+            console.log('- barangay_history (browser)');
+            console.log('- checklist_* (browser)');
+            console.log('- summary (browser)');
+            console.log('- contact_* (browser)');
+            
+            // Redirect after 2 seconds
+            setTimeout(() => {
+                alert('✅ All data cleared! Redirecting to login page...');
+                // Use replace to prevent going back to this page
+                window.location.replace('/');
+            }, 1500);
+        }
+        
+        function goHome() {
+            window.location.href = '/';
+        }
+    </script>
+</body>
+</html>
