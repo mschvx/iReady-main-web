@@ -907,30 +907,7 @@ export const Home = (): JSX.Element => {
                   positions={typhoonTrack as [number, number][]}
                   pathOptions={{ color: '#0ea5e9', weight: 4, opacity: 0.9 }}
                 />
-                {/* Snapshot points along the track */}
-                {typhoonSnapshots.map((pt, i) => (
-                  <CircleMarker
-                    key={`ty-snap-${i}`}
-                    center={[pt.lat, pt.lon]}
-                    radius={6}
-                    pathOptions={{ color: '#0ea5e9', fillColor: '#0ea5e9', fillOpacity: 0.95, weight: 1 }}
-                  >
-                    <LeafletTooltip direction="top" offset={[0, -8]} className="bg-white text-xs text-black px-1 py-0 rounded shadow-sm">
-                      T+{pt.hours}h
-                    </LeafletTooltip>
-                    <LeafletPopup>
-                      <div style={{ minWidth: 180 }}>
-                        <div className="font-semibold mb-1">Forecast snapshot (T+{pt.hours}h)</div>
-                        <div className="text-sm grid grid-cols-2 gap-x-2 gap-y-1">
-                          <div className="text-gray-600">Rainfall</div><div className="font-medium">{pt.rain} mm</div>
-                          <div className="text-gray-600">Wind</div><div className="font-medium">{pt.wind} km/h</div>
-                          <div className="text-gray-600">Gusts</div><div className="font-medium">{pt.gusts} km/h</div>
-                          <div className="text-gray-600">Pressure</div><div className="font-medium">{pt.pressure} hPa</div>
-                        </div>
-                      </div>
-                    </LeafletPopup>
-                  </CircleMarker>
-                ))}
+
               </>
             )}
             {/* barangay points layer (small markers) - now colored by category */}
