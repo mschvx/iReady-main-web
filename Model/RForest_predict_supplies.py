@@ -15,7 +15,7 @@ base = _data_dir()
 health_fp = base / 'CCHAIN' / 'health_facility_evacuation_center_proximity_population.csv'
 wealth_fp = base / 'CCHAIN' / 'wealth_index.csv'
 disease_fp = base / 'CCHAIN' / 'disease_index.csv'
-climate_fp = base / 'CLIMAP' / 'laguna_rainfall.csv'
+climate_fp = base / 'CLIMAP' / 'metro_manila_rainfall.csv'
 
 wealth = _load_wealth(wealth_fp)
 health = _load_health(health_fp)
