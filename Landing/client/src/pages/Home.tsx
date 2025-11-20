@@ -405,16 +405,10 @@ export const Home = (): JSX.Element => {
       }
     })();
 
-    // initialize visible layer toggles once
+    // initialize visible layer toggles once (only two layers controlled by legend)
     setVisibleLayers({
       barangays: true,
       typhoon: true,
-      evacuation: true,
-      hospital: true,
-      school: true,
-      market: true,
-      church: true,
-      other: true,
     });
   }, []);
 
@@ -446,12 +440,8 @@ export const Home = (): JSX.Element => {
     );
 
 
-    // Define all categories for equal distribution
-    const categories = ['barangays', 'evacuation', 'hospital', 'school', 'market', 'church', 'other'];
-
-    // If we have areaCodes, place ONLY those ADM4 codes using the exact
-    // centroids from the CSV. Do not invent or clamp coordinates for codes
-    // that aren't present in the CSV — user requested real coordinates only.
+    // We only use a single category for display centers: 'barangays'.
+    // This ensures all points are styled consistently with the Barangay legend.
     if (areaCodes && areaCodes.length > 0) {
       const codes = areaCodes.slice(0, count);
       for (let i = 0; i < codes.length; i++) {
@@ -463,11 +453,10 @@ export const Home = (): JSX.Element => {
           console.warn(`No brgy centroid found for ${code}; skipping marker.`);
           continue;
         }
-        const category = categories[i % categories.length];
-        centers.push({ adm4_pcode: code, lat: match.lat, lon: match.lon, category });
+        centers.push({ adm4_pcode: code, lat: match.lat, lon: match.lon, category: 'barangays' });
       }
     } else {
-      // No areaCodes available: fall back to deterministic Metro Manila local centers
+      // Fallback deterministic centers; mark all as 'barangays'
       for (let i = 0; i < count; i++) {
         const code = `PH-FAKE-${i + 1}`;
         const { lat: baseLat, lon: baseLon } = getLatLonForCode(code);
@@ -478,8 +467,7 @@ export const Home = (): JSX.Element => {
         let lon = baseLon + jitterLon;
         lat = Math.max(METRO_MANILA_BOUNDS.minLat, Math.min(METRO_MANILA_BOUNDS.maxLat, lat));
         lon = Math.max(METRO_MANILA_BOUNDS.minLon, Math.min(METRO_MANILA_BOUNDS.maxLon, lon));
-        const category = categories[i % categories.length];
-        centers.push({ adm4_pcode: code, lat, lon, category });
+        centers.push({ adm4_pcode: code, lat, lon, category: 'barangays' });
       }
     }
 
@@ -981,58 +969,24 @@ export const Home = (): JSX.Element => {
               {/* barangay markers rendered once — controlled by visibleLayers.barangays */}
 
 
-              {/* POIs rendered as translucent area circles when enabled */}
-              {showAreaCircles && poiCenters.map((p) => (
-                <Circle
+              {/* POIs rendered as neutral markers when barangay layer is visible */}
+              {showAreaCircles && visibleLayers.barangays && poiCenters.map((p) => (
+                <CircleMarker
                   key={p.id}
                   center={[p.lat, p.lon]}
-                  radius={80} // ~80 meters default area circle
-                  pathOptions={{ color: '#1f2937', fillColor: '#1f2937', fillOpacity: 0.15, weight: 0.8 }}
+                  radius={10}
+                  pathOptions={{ color: '#6b7280', fillColor: '#6b7280', fillOpacity: 0.12, weight: 0.8 }}
                 >
                   {showPoiLabels && (
                     <LeafletTooltip direction="top" offset={[0, -6]} className="bg-white text-xs text-black px-1 py-0 rounded shadow-sm">
                       {p.name}
                     </LeafletTooltip>
                   )}
-                </Circle>
+                </CircleMarker>
               ))}
 
 
-            {/* POI area circles (translucent) */}
-            {poiCenters && poiCenters.length > 0 && (
-              <>
-                {poiCenters.map((p) => {
-                  // simple heuristic category based on keywords/name
-                  const name = (p.name || '').toLowerCase();
-                  let category = 'other';
-                  if (name.includes('evac') || name.includes('evacuation') || name.includes('center')) category = 'evacuation';
-                  else if (name.includes('hosp') || name.includes('clinic') || name.includes('health')) category = 'hospital';
-                  else if (name.includes('school') || name.includes('college')) category = 'school';
-                  else if (name.includes('market') || name.includes('palengke') || name.includes('mall')) category = 'market';
-                  else if (name.includes('church') || name.includes('chapel') || name.includes('mosque') || name.includes('temple')) category = 'church';
-
-
-                  const colorMap: Record<string, string> = {
-                    evacuation: '#f97316', // orange
-                    hospital: '#ef4444', // red
-                    school: '#6366f1', // indigo
-                    market: '#16a34a', // green
-                    church: '#7c3aed', // purple
-                    other: '#6b7280',
-                  };
-
-
-                  if (!visibleLayers[category]) return null;
-
-
-                  return (
-                    <CircleMarker key={p.id} center={[p.lat, p.lon]} radius={25} pathOptions={{ color: colorMap[category], fillColor: colorMap[category], fillOpacity: 0.18, weight: 1 }}>
-                      <LeafletPopup>{p.name}</LeafletPopup>
-                    </CircleMarker>
-                  );
-                })}
-              </>
-            )}
+            {/* POI area markers simplified (no per-category coloring) - handled above */}
           </MapContainer>
           <button className="absolute left-2 bottom-8 bg-[#93c5fd] px-6 py-2 rounded-xl text-white text-lg hover:bg-[#7ab8f7]" style={{ zIndex: 10 }}>
             go back
@@ -1280,7 +1234,6 @@ export const Home = (): JSX.Element => {
 
 
           <div className="grid grid-cols-2 gap-4 mb-6">
-            {/* Legend items keyed to the same keys used in `visibleLayers` so toggles work */}
             {[
               { key: 'barangays', label: 'Barangay', color: '#2563eb', desc: 'Target local communities', shape: 'circle' },
               { key: 'typhoon', label: 'Typhoon track', color: '#0ea5e9', desc: 'Forecast path', shape: 'line' },

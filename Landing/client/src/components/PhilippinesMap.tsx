@@ -260,7 +260,7 @@ export const PhilippinesMap: React.FC<PhilippinesMapProps> = ({ className = '' }
           key={b.id}
           center={[b.lat, b.lon]}
           radius={3}
-          pathOptions={{ color: '#2563eb', fillColor: '#2563eb', weight: 1, fillOpacity: 0.9 }}
+          pathOptions={{ color: '#f97316', fillColor: '#fb923c', weight: 1, fillOpacity: 0.9 }}
         >
           <Popup>{b.id}</Popup>
         </CircleMarker>
@@ -270,10 +270,10 @@ export const PhilippinesMap: React.FC<PhilippinesMapProps> = ({ className = '' }
       {typhoonGeoJson && (
         <GeoJSON
           data={typhoonGeoJson}
-            style={() => ({ color: '#0ea5e9', weight: 3, opacity: 0.95 })}
+          style={() => ({ color: '#2563eb', weight: 3, opacity: 0.9 })}
           pointToLayer={(feature: any, latlng: any) => {
             // for points, render a small marker
-              return L.circleMarker(latlng, { radius: 3, color: '#0ea5e9', fillColor: '#0ea5e9', fillOpacity: 0.9 });
+            return L.circleMarker(latlng, { radius: 4, color: '#2563eb', fillColor: '#60a5fa', fillOpacity: 0.9 });
           }}
         />
       )}
@@ -299,7 +299,7 @@ export const PhilippinesMap: React.FC<PhilippinesMapProps> = ({ className = '' }
       <Polyline
         positions={trackPoints as [number, number][]}
         pathOptions={{ 
-            color: '#0ea5e9', 
+          color: '#2563eb', 
           weight: 3, 
           opacity: 0.95 
         }}
@@ -325,7 +325,7 @@ export const PhilippinesMap: React.FC<PhilippinesMapProps> = ({ className = '' }
       <Polyline
         positions={[trackPoints[trackPoints.length - 2], trackPoints[trackPoints.length - 1]] as [number, number][]}
         pathOptions={{ 
-            color: '#0ea5e9', 
+          color: '#2563eb', 
           weight: 3, 
           opacity: 0.95, 
           dashArray: '6 6' 
