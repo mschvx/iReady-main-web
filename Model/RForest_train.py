@@ -254,7 +254,7 @@ def train_rf_model():
         else:
             item_group[s] = 'water'
 
-    targets = {}
+    targets = {} 
     for s in supplies:
         grp = item_group[s]
         base_factor = category_factor.get(grp, 1.0)
