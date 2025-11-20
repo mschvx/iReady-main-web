@@ -11,6 +11,14 @@ const NAVOTAS_BOUNDS = {
   maxLon: 120.944,
 };
 
+// Metro Manila bounding box (approx) — used as the default area for ADM4 codes
+const METRO_MANILA_BOUNDS = {
+  minLat: 14.40,
+  maxLat: 14.75,
+  minLon: 120.90,
+  maxLon: 121.10,
+};
+
 
 type BarangayCenter = {
   adm4_pcode: string;
@@ -60,8 +68,11 @@ function getLatLonForCode(code: string): { lat: number; lon: number } {
   }
   const t = (h % 100000) / 100000;
   const u = ((h >>> 7) % 100000) / 100000;
-  const lat = NAVOTAS_LAND_BOUNDS.minLat + t * (NAVOTAS_LAND_BOUNDS.maxLat - NAVOTAS_LAND_BOUNDS.minLat);
-  const lon = NAVOTAS_LAND_BOUNDS.minLon + u * (NAVOTAS_LAND_BOUNDS.maxLon - NAVOTAS_LAND_BOUNDS.minLon);
+  // Use Metro Manila bounds for deterministic placement so ADM4 area codes
+  // land within Metro Manila (Navotas, Mandaluyong, Muntinlupa, etc.). When
+  // real CSV centroids are available we will prefer them instead.
+  const lat = METRO_MANILA_BOUNDS.minLat + t * (METRO_MANILA_BOUNDS.maxLat - METRO_MANILA_BOUNDS.minLat);
+  const lon = METRO_MANILA_BOUNDS.minLon + u * (METRO_MANILA_BOUNDS.maxLon - METRO_MANILA_BOUNDS.minLon);
   return { lat, lon };
 }
 import { useLocation } from "wouter";
@@ -139,8 +150,10 @@ export const Home = (): JSX.Element => {
     useEffect(() => {
       if (fitted.current) return;
       try {
-        const southWest: [number, number] = [NAVOTAS_BOUNDS.minLat, NAVOTAS_BOUNDS.minLon];
-        const northEast: [number, number] = [NAVOTAS_BOUNDS.maxLat, NAVOTAS_BOUNDS.maxLon];
+        // Fit to Metro Manila bounds by default so markers from PH area codes
+        // that fall in Metro Manila are visible on load.
+        const southWest: [number, number] = [METRO_MANILA_BOUNDS.minLat, METRO_MANILA_BOUNDS.minLon];
+        const northEast: [number, number] = [METRO_MANILA_BOUNDS.maxLat, METRO_MANILA_BOUNDS.maxLon];
         map.fitBounds([southWest, northEast], { animate: false, padding: [20, 20] });
         fitted.current = true;
       } catch (err) {
@@ -158,11 +171,30 @@ export const Home = (): JSX.Element => {
         return { adm4_pcode: c, lat, lon };
       })
     : fallbackBarangayCenters;
-  // default map center set to Navotas area center so our 50 points are visible on load
-  const defaultCenterLat = (NAVOTAS_LAND_BOUNDS.minLat + NAVOTAS_LAND_BOUNDS.maxLat) / 2;
-  const defaultCenterLon = (NAVOTAS_LAND_BOUNDS.minLon + NAVOTAS_LAND_BOUNDS.maxLon) / 2;
+  // default map center set to Metro Manila (so markers for Manila-area ADM4 codes are visible)
+  const defaultCenterLat = (METRO_MANILA_BOUNDS.minLat + METRO_MANILA_BOUNDS.maxLat) / 2;
+  const defaultCenterLon = (METRO_MANILA_BOUNDS.minLon + METRO_MANILA_BOUNDS.maxLon) / 2;
   const [mapCenter, setMapCenter] = useState({ lat: defaultCenterLat, lon: defaultCenterLon });
   const [mapZoom, setMapZoom] = useState<number>(13); // <- new: zoom state
+  // brgy points loaded from CSV (adm4_pcode -> centroid)
+  const [brgyPoints, setBrgyPoints] = useState<{ id: string; lat: number; lon: number }[]>([]);
+  // typhoon track state (will be replaced by GeoJSON if available)
+  const [typhoonTrack, setTyphoonTrack] = useState<[number, number][]>(() => {
+    const midLat = (NAVOTAS_BOUNDS.minLat + NAVOTAS_BOUNDS.maxLat) / 2;
+    const midLon = (NAVOTAS_BOUNDS.minLon + NAVOTAS_BOUNDS.maxLon) / 2;
+    return [
+      [9.0, 137.0],
+      [10.0, 133.5],
+      [10.8, 130.0],
+      [11.5, 126.5],
+      [12.3, 123.5],
+      [13.0, 121.8],
+      [midLat, midLon],
+      [15.0, 119.0],
+      [17.0, 116.0],
+      [19.0, 114.0],
+    ];
+  });
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [suggestions, setSuggestions] = useState<Array<{ id: string; name: string; lat: number; lon: number }>>([]);
@@ -185,25 +217,72 @@ export const Home = (): JSX.Element => {
   // Error modal for claiming multiple barangays
   const [showClaimLimitModal, setShowClaimLimitModal] = useState<boolean>(false);
 
-  // Typhoon track on a larger (Philippines) scale, passing through Navotas center
-  const typhoonTrack: [number, number][] = React.useMemo(() => {
-    const midLat = (NAVOTAS_BOUNDS.minLat + NAVOTAS_BOUNDS.maxLat) / 2;
-    const midLon = (NAVOTAS_BOUNDS.minLon + NAVOTAS_BOUNDS.maxLon) / 2;
-    return [
-      // Far SE Pacific approach
-      [9.0, 137.0],
-      [10.0, 133.5],
-      [10.8, 130.0],
-      [11.5, 126.5],
-      [12.3, 123.5],
-      [13.0, 121.8],
-      // Force the path to pass through Navotas
-      [midLat, midLon],
-      // Continue NW past Luzon into the West Philippine Sea
-      [15.0, 119.0],
-      [17.0, 116.0],
-      [19.0, 114.0],
-    ];
+  // Load typhoon GeoJSON and barangay CSV from frontend `public/data/`.
+  // These populate `typhoonTrack` and `brgyPoints` state respectively.
+  useEffect(() => {
+    (async () => {
+      try {
+        const resp = await fetch('/data/ph-all-tc-tracks-2024.geojson');
+        if (!resp.ok) return;
+        const gj = await resp.json();
+        if (gj && Array.isArray(gj.features) && gj.features.length > 0) {
+          // find first LineString feature
+          const ln = gj.features.find((f: any) => f.geometry && f.geometry.type === 'LineString');
+          if (ln && Array.isArray(ln.geometry.coordinates)) {
+            const coords = ln.geometry.coordinates.map((c: any) => [c[1], c[0]] as [number, number]);
+            setTyphoonTrack(coords);
+          }
+        }
+      } catch (err) {
+        // ignore
+      }
+    })();
+
+    (async () => {
+      try {
+        // prefer precomputed centroids if available
+        let resp = await fetch('/data/brgy_centroids.json');
+        if (resp.ok) {
+          const data = await resp.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setBrgyPoints(data.map((d: any) => ({ id: d.id || d[0] || d.code, lat: Number(d.lat), lon: Number(d.lon) })));
+            return;
+          }
+        }
+
+        // fallback to raw CSV parsing if centroids file not present
+        resp = await fetch('/data/brgy_geography.csv');
+        if (!resp.ok) return;
+        const txt = await resp.text();
+        const lines = txt.split(/\r?\n/).filter(Boolean);
+        const parsed: { id: string; lat: number; lon: number }[] = [];
+        for (const line of lines) {
+          // naive CSV split (id, "POLYGON ((...))")
+          const m = line.match(/^\s*([^,]+),\s*"?POLYGON \(\((.+)\)\)"?\s*$/i);
+          if (!m) continue;
+          const id = m[1];
+          const coordsStr = m[2];
+          const parts = coordsStr.split(/,\s*/).map(p => p.trim());
+          const verts: [number, number][] = [];
+          for (const part of parts) {
+            const pair = part.split(/\s+/).map(Number);
+            if (pair.length >= 2 && !Number.isNaN(pair[0]) && !Number.isNaN(pair[1])) {
+              const lon = pair[0];
+              const lat = pair[1];
+              verts.push([lat, lon]);
+            }
+          }
+          if (verts.length === 0) continue;
+          // simple centroid (arithmetic mean of vertices)
+          const sum = verts.reduce((acc, v) => [acc[0] + v[0], acc[1] + v[1]] as [number, number], [0, 0]);
+          const cen: [number, number] = [sum[0] / verts.length, sum[1] / verts.length];
+          parsed.push({ id, lat: cen[0], lon: cen[1] });
+        }
+        if (parsed.length > 0) setBrgyPoints(parsed);
+      } catch (err) {
+        // ignore
+      }
+    })();
   }, []);
 
   // Utility: Haversine distance in meters
@@ -326,7 +405,6 @@ export const Home = (): JSX.Element => {
       }
     })();
 
-
     // initialize visible layer toggles once
     setVisibleLayers({
       barangays: true,
@@ -362,40 +440,52 @@ export const Home = (): JSX.Element => {
       };
     };
 
+    // Map of CSV-derived barangay centroids for quick lookup (id -> centroid)
+    const brgyMap = new Map<string, { id: string; lat: number; lon: number }>(
+      (brgyPoints || []).map((b) => [String(b.id).toLowerCase(), b])
+    );
+
 
     // Define all categories for equal distribution
     const categories = ['barangays', 'evacuation', 'hospital', 'school', 'market', 'church', 'other'];
 
-    // choose a deterministic or random poi index for each code
-    for (let i = 0; i < count; i++) {
-      const code = (areaCodes && areaCodes.length > 0) ? areaCodes[i % areaCodes.length] : `PH-FAKE-${i + 1}`;
-      let lat = 0;
-      let lon = 0;
-
-      // Assign category in round-robin fashion for equal distribution
-      const category = categories[i % categories.length];
-
-      // Always compute deterministic centers inside NAVOTAS_LAND_BOUNDS.
-      // This guarantees all points render in Navotas regardless of
-      // server POI coverage (prevents accidental placement in Cavite).
-      const { lat: baseLat, lon: baseLon } = getLatLonForCode(code);
-      const prng = rng(code + String(i));
-      const jitterLat = (prng() - 0.5) * 0.003; // ~100-150m jitter
-      const jitterLon = (prng() - 0.5) * 0.003;
-      lat = baseLat + jitterLat;
-      lon = baseLon + jitterLon;
-
-
-     
-      // ensure generated centers also lie within NAVOTAS_LAND_BOUNDS
-      lat = Math.max(NAVOTAS_LAND_BOUNDS.minLat, Math.min(NAVOTAS_LAND_BOUNDS.maxLat, lat));
-      lon = Math.max(NAVOTAS_LAND_BOUNDS.minLon, Math.min(NAVOTAS_LAND_BOUNDS.maxLon, lon));
-      centers.push({ adm4_pcode: code, lat, lon, category });
+    // If we have areaCodes, place ONLY those ADM4 codes using the exact
+    // centroids from the CSV. Do not invent or clamp coordinates for codes
+    // that aren't present in the CSV — user requested real coordinates only.
+    if (areaCodes && areaCodes.length > 0) {
+      const codes = areaCodes.slice(0, count);
+      for (let i = 0; i < codes.length; i++) {
+        const code = codes[i];
+        const lc = String(code).toLowerCase();
+        const match = brgyMap.get(lc);
+        if (!match) {
+          // No centroid available for this ADM4 code — skip it rather than inventing one
+          console.warn(`No brgy centroid found for ${code}; skipping marker.`);
+          continue;
+        }
+        const category = categories[i % categories.length];
+        centers.push({ adm4_pcode: code, lat: match.lat, lon: match.lon, category });
+      }
+    } else {
+      // No areaCodes available: fall back to deterministic Metro Manila local centers
+      for (let i = 0; i < count; i++) {
+        const code = `PH-FAKE-${i + 1}`;
+        const { lat: baseLat, lon: baseLon } = getLatLonForCode(code);
+        const prng = rng(code + String(i));
+        const jitterLat = (prng() - 0.5) * 0.003;
+        const jitterLon = (prng() - 0.5) * 0.003;
+        let lat = baseLat + jitterLat;
+        let lon = baseLon + jitterLon;
+        lat = Math.max(METRO_MANILA_BOUNDS.minLat, Math.min(METRO_MANILA_BOUNDS.maxLat, lat));
+        lon = Math.max(METRO_MANILA_BOUNDS.minLon, Math.min(METRO_MANILA_BOUNDS.maxLon, lon));
+        const category = categories[i % categories.length];
+        centers.push({ adm4_pcode: code, lat, lon, category });
+      }
     }
 
 
     setDisplayCenters(centers);
-  }, [areaCodes, poiCenters]);
+  }, [areaCodes, poiCenters, brgyPoints]);
 
   // Handle focusing on barangay when navigating from Account page
   useEffect(() => {
@@ -1182,30 +1272,25 @@ export const Home = (): JSX.Element => {
             </div>
           </div>
 
+          {}
 
-          {/* Legends Section (enhanced) */}
           <p className="font-extrabold text-2xl md:text-3xl text-black tracking-tight mb-3">
-            Legends
+            Legend
           </p>
 
 
           <div className="grid grid-cols-2 gap-4 mb-6">
+            {/* Legend items keyed to the same keys used in `visibleLayers` so toggles work */}
             {[
-              { key: 'barangays', label: 'Barangay Hall', color: '#2563eb', desc: 'Barangay centers' },
-              { key: 'typhoon', label: 'Typhoon track', color: '#0ea5e9', desc: 'Forecast path' },
-              { key: 'evacuation', label: 'Evacuation Center', color: '#f97316', desc: 'Safe zones' },
-              { key: 'hospital', label: 'Hospital/Clinic', color: '#ef4444', desc: 'Medical facilities' },
-              { key: 'school', label: 'School', color: '#6366f1', desc: 'Educational institutions' },
-              { key: 'market', label: 'Market', color: '#16a34a', desc: 'Trading areas' },
-              { key: 'church', label: 'Place of Worship', color: '#7c3aed', desc: 'Religious sites' },
-              { key: 'other', label: 'Other POIs', color: '#6b7280', desc: 'Miscellaneous' },
+              { key: 'barangays', label: 'Barangay', color: '#2563eb', desc: 'Target local communities', shape: 'circle' },
+              { key: 'typhoon', label: 'Typhoon track', color: '#0ea5e9', desc: 'Forecast path', shape: 'line' },
             ].map((item) => (
               <button
                 key={item.key}
                 onClick={() => setVisibleLayers(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
                 className={`flex items-center gap-3 p-2 rounded hover:bg-gray-100 text-left ${!visibleLayers[item.key] ? 'opacity-50' : ''}`}
               >
-                {item.key === 'typhoon' ? (
+                {item.shape === 'line' ? (
                   <span
                     className="inline-block mr-2"
                     style={{
@@ -1213,7 +1298,7 @@ export const Home = (): JSX.Element => {
                       height: '4px',
                       width: '28px',
                       borderRadius: '2px',
-                      boxShadow: '0 0 6px rgba(14,165,233,0.4)'
+                      boxShadow: `0 0 6px ${item.color}33`
                     }}
                   />
                 ) : (
@@ -1263,7 +1348,7 @@ export const Home = (): JSX.Element => {
 
           {/* Needs Section */}
           <p className="font-extrabold text-2xl md:text-3xl text-black tracking-tight mb-3">
-            Needs
+            Needs as of:
           </p>
          
           {!selectedBarangay ? (

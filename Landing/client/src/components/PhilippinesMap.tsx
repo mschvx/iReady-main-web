@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, Circle } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, Circle, GeoJSON } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -25,19 +25,22 @@ export const PhilippinesMap: React.FC<PhilippinesMapProps> = ({ className = '' }
   const philippinesCenter: [number, number] = [12.8797, 121.7740];
   const zoom = 6;
 
-  // --- Typhoon track data (simple sample path across PH) ---
-  // Order: from southeast (Pacific) moving northwest.
-  const trackPoints = useMemo<readonly [number, number][]>(() => [
+  // Typhoon track points - default sample until GeoJSON is loaded
+  const [trackPoints, setTrackPoints] = useState<readonly [number, number][]>(() => [
     [10.0, 135.5],
     [10.2, 132.0],
     [10.4, 129.0],
     [10.6, 126.2],
-    [11.0, 123.8], // approaching E. Visayas
-    [11.8, 122.2], // crossing Visayas
-    [12.8, 121.0], // near Mindoro
-    [13.7, 120.1], // S. Luzon / Mindoro Strait
-    [14.8, 119.2], // W of Luzon
-  ], []);
+    [11.0, 123.8],
+    [11.8, 122.2],
+    [12.8, 121.0],
+    [13.7, 120.1],
+    [14.8, 119.2],
+  ]);
+
+  // Barangay centroids loaded from CSV
+  const [brgyPoints, setBrgyPoints] = useState<{ id: string; lat: number; lon: number }[]>([]);
+  const [typhoonGeoJson, setTyphoonGeoJson] = useState<any | null>(null);
 
   // Animation state for moving marker along the path
   const [animPos, setAnimPos] = useState<[number, number]>(trackPoints[0]);
@@ -69,6 +72,67 @@ export const PhilippinesMap: React.FC<PhilippinesMapProps> = ({ className = '' }
   const [progressAlongPath, setProgressAlongPath] = useState(0); // 0 to 1
 
   useEffect(() => {
+    // Load barangay CSV and typhoon GeoJSON from public/data
+    (async () => {
+      try {
+        // Fetch and parse barangay CSV
+        const res = await fetch('/data/brgy_geography.csv');
+        if (res.ok) {
+          const txt = await res.text();
+          const lines = txt.split(/\r?\n/).filter(Boolean);
+          const parsed: { id: string; lat: number; lon: number }[] = [];
+          for (let i = 1; i < lines.length; i++) {
+            const line = lines[i];
+            const firstComma = line.indexOf(',');
+            if (firstComma === -1) continue;
+            const id = line.slice(0, firstComma).trim();
+            const geom = line.slice(firstComma + 1).trim();
+            // extract coordinate list inside POLYGON (( ... ))
+            const m = geom.match(/\(\((.*)\)\)/);
+            if (!m) continue;
+            const coordsText = m[1];
+            const pairs = coordsText.split(',').map(s => s.trim()).filter(Boolean);
+            const pts: [number, number][] = [];
+            for (const p of pairs) {
+              const parts = p.split(/\s+/).filter(Boolean);
+              if (parts.length >= 2) {
+                const lon = Number(parts[0]);
+                const lat = Number(parts[1]);
+                if (!Number.isNaN(lat) && !Number.isNaN(lon)) pts.push([lat, lon]);
+              }
+            }
+            if (pts.length) {
+              // simple centroid: average of vertices
+              const avgLat = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+              const avgLon = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+              parsed.push({ id, lat: avgLat, lon: avgLon });
+            }
+          }
+          setBrgyPoints(parsed);
+        }
+      } catch (err) {
+        // ignore; keep defaults
+        // console.warn('Failed to load brgy csv', err);
+      }
+
+      try {
+        const res2 = await fetch('/data/ph-all-tc-tracks-2024.geojson');
+        if (res2.ok) {
+          const j = await res2.json();
+          setTyphoonGeoJson(j);
+          // if first feature is a LineString, set trackPoints for animation
+          if (j.features && j.features.length && j.features[0].geometry && j.features[0].geometry.coordinates) {
+            const coords: any[] = j.features[0].geometry.coordinates;
+            // convert [lon, lat] -> [lat, lon]
+            const pts = coords.map(c => [c[1], c[0]] as [number, number]);
+            setTrackPoints(pts);
+          }
+        }
+      } catch (err) {
+        // console.warn('Failed to load typhoon geojson', err);
+      }
+    })();
+
     // Precompute segment lengths for time weighting
     const segLen: number[] = [];
     let total = 0;
@@ -190,6 +254,30 @@ export const PhilippinesMap: React.FC<PhilippinesMapProps> = ({ className = '' }
         </Popup>
       </Marker>
 
+      {/* Render barangay centroids from CSV */}
+      {brgyPoints.map((b) => (
+        <CircleMarker
+          key={b.id}
+          center={[b.lat, b.lon]}
+          radius={3}
+          pathOptions={{ color: '#2563eb', fillColor: '#2563eb', weight: 1, fillOpacity: 0.9 }}
+        >
+          <Popup>{b.id}</Popup>
+        </CircleMarker>
+      ))}
+
+      {/* Render typhoon GeoJSON if available */}
+      {typhoonGeoJson && (
+        <GeoJSON
+          data={typhoonGeoJson}
+            style={() => ({ color: '#0ea5e9', weight: 3, opacity: 0.95 })}
+          pointToLayer={(feature: any, latlng: any) => {
+            // for points, render a small marker
+              return L.circleMarker(latlng, { radius: 3, color: '#0ea5e9', fillColor: '#0ea5e9', fillOpacity: 0.9 });
+          }}
+        />
+      )}
+
       {/* Forecast-style track line (solid for past/current, dashed for forecast) */}
       {/* Glow effect layers */}
       <Polyline
@@ -211,7 +299,7 @@ export const PhilippinesMap: React.FC<PhilippinesMapProps> = ({ className = '' }
       <Polyline
         positions={trackPoints as [number, number][]}
         pathOptions={{ 
-          color: '#2563eb', 
+            color: '#0ea5e9', 
           weight: 3, 
           opacity: 0.95 
         }}
@@ -237,7 +325,7 @@ export const PhilippinesMap: React.FC<PhilippinesMapProps> = ({ className = '' }
       <Polyline
         positions={[trackPoints[trackPoints.length - 2], trackPoints[trackPoints.length - 1]] as [number, number][]}
         pathOptions={{ 
-          color: '#2563eb', 
+            color: '#0ea5e9', 
           weight: 3, 
           opacity: 0.95, 
           dashArray: '6 6' 
