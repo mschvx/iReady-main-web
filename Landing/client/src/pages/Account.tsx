@@ -39,36 +39,33 @@ export const Account = (): JSX.Element => {
 
   // Prediction data for current barangay
   const [currentPrediction, setCurrentPrediction] = useState<any>(null);
-
-  // Checklist state - stored per barangay
-  interface ChecklistItem {
+  // Simple checklist items (per-barangay) - editable list with quantity
+  interface SimpleItem {
     id: string;
     text: string;
-    checked: boolean;
+    qty: number;
   }
-  
-  interface ChecklistData {
-    high: ChecklistItem[];
-    medium: ChecklistItem[];
-    low: ChecklistItem[];
-  }
-  
-  const [checklist, setChecklist] = useState<ChecklistData>(() => {
+
+  const [items, setItems] = useState<SimpleItem[]>(() => {
     const currentBarangay = barangayHistory[0]?.code;
-    if (!currentBarangay) return { high: [], medium: [], low: [] };
-    
-    const stored = localStorage.getItem(`checklist_${currentBarangay}`);
+    if (!currentBarangay) return [];
+    const stored = localStorage.getItem(`checklist_items_${currentBarangay}`);
     if (stored) {
       try {
         return JSON.parse(stored);
       } catch {
-        return { high: [], medium: [], low: [] };
+        return [];
       }
     }
-    return { high: [], medium: [], low: [] };
+    return [];
   });
 
-  // edit modal state: uses an overlay (similar to login/signup)
+    // Co-responder (backup) request state, stored per-barangay
+    const [coResponderEnabled, setCoResponderEnabled] = useState<boolean>(false);
+    const [coResponderQty, setCoResponderQty] = useState<number>(1);
+    const [blockedClaimant, setBlockedClaimant] = useState<string | null>(null);
+
+  // small inputs for adding a new item
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const [editSummary, setEditSummary] = useState<string>("");
   // multiple social entries support with name and link
@@ -77,9 +74,7 @@ export const Account = (): JSX.Element => {
   const [editPhone, setEditPhone] = useState<string>("");
 
   // Checklist add item modal state
-  const [showChecklistModal, setShowChecklistModal] = useState<boolean>(false);
-  const [checklistModalPriority, setChecklistModalPriority] = useState<'high' | 'medium' | 'low'>('high');
-  const [checklistItemText, setChecklistItemText] = useState<string>("");
+  // (old priority-based checklist modal removed; using simple per-barangay items)
 
   // Fetch current authenticated user; redirect if unauthenticated
   useEffect(() => {
@@ -145,35 +140,75 @@ export const Account = (): JSX.Element => {
   }, [user]);
 
   useEffect(() => {
-    // Load prediction data immediately
+    // Load prediction data and barangay history, then fetch claims so we can avoid showing a barangay
+    // that has already been claimed by someone else.
     (async () => {
       try {
-        const response = await fetch("/ToReceive.json");
-        if (response.ok) {
-          const data = await response.json();
-          
-          // Load barangay history
+        const [toRecvResp, claimsResp] = await Promise.all([
+          fetch("/ToReceive.json"),
+          fetch("/api/barangay/claims", { credentials: "include" }),
+        ]);
+
+        const claimsMap: Record<string, string> = {};
+        if (claimsResp && claimsResp.ok) {
+          try {
+            const claimsJson = await claimsResp.json();
+            (claimsJson.claims || []).forEach((c: any) => (claimsMap[c.barangayCode] = c.username));
+            setBarangayClaims(claimsMap);
+          } catch (e) {
+            console.error('Failed to parse claims JSON', e);
+          }
+        }
+
+        if (toRecvResp && toRecvResp.ok) {
+          const data = await toRecvResp.json();
+
           try {
             const historyData = localStorage.getItem("barangay_history");
             if (historyData) {
               const parsed = JSON.parse(historyData);
               setBarangayHistory(Array.isArray(parsed) ? parsed : []);
-              
-              // Load checklist and prediction for the most recent barangay
+
               if (parsed.length > 0) {
                 const currentBarangay = parsed[0].code;
-                const checklistData = localStorage.getItem(`checklist_${currentBarangay}`);
-                if (checklistData) {
-                  try {
-                    setChecklist(JSON.parse(checklistData));
-                  } catch {
-                    setChecklist({ high: [], medium: [], low: [] });
+
+                // If currentBarangay is claimed by someone else, don't show it as focused here
+                const claimant = claimsMap[currentBarangay];
+                if (claimant && claimant !== (user?.username || null)) {
+                  setCurrentPrediction(null);
+                  setItems([]);
+                  setBlockedClaimant(claimant);
+                } else {
+                  setBlockedClaimant(null);
+                  const storedItems = localStorage.getItem(`checklist_items_${currentBarangay}`);
+                  if (storedItems) {
+                    try {
+                      setItems(JSON.parse(storedItems));
+                    } catch {
+                      setItems([]);
+                    }
                   }
+
+                  // load co-responder preference for this barangay
+                  try {
+                    const coRaw = localStorage.getItem(`co_responder_${currentBarangay}`);
+                    if (coRaw) {
+                      const parsedCo = JSON.parse(coRaw);
+                      setCoResponderEnabled(Boolean(parsedCo.enabled));
+                      setCoResponderQty(typeof parsedCo.qty === 'number' ? parsedCo.qty : 1);
+                    } else {
+                      setCoResponderEnabled(false);
+                      setCoResponderQty(1);
+                    }
+                  } catch {
+                    setCoResponderEnabled(false);
+                    setCoResponderQty(1);
+                  }
+
+                  // Set prediction data
+                  const prediction = data.find((p: any) => p.adm4_pcode === currentBarangay);
+                  setCurrentPrediction(prediction || null);
                 }
-                
-                // Set prediction data immediately
-                const prediction = data.find((p: any) => p.adm4_pcode === currentBarangay);
-                setCurrentPrediction(prediction || null);
               }
             }
           } catch (err) {
@@ -181,29 +216,10 @@ export const Account = (): JSX.Element => {
           }
         }
       } catch (err) {
-        console.error("Failed to load prediction data:", err);
+        console.error("Initialization failed:", err);
       }
     })();
-
-    // Load barangay claims from server
-    (async () => {
-      try {
-        const response = await fetch("/api/barangay/claims", {
-          credentials: "include",
-        });
-        if (response.ok) {
-          const data = await response.json();
-          const claimsMap: Record<string, string> = {};
-          data.claims.forEach((claim: any) => {
-            claimsMap[claim.barangayCode] = claim.username;
-          });
-          setBarangayClaims(claimsMap);
-        }
-      } catch (err) {
-        console.error("Failed to load barangay claims:", err);
-      }
-    })();
-  }, []);
+  }, [user]);
 
   const getInitials = (name: string) =>
     name
@@ -333,58 +349,62 @@ export const Account = (): JSX.Element => {
     setLocation("/login");
   };
 
-  // Checklist management functions
-  const saveChecklist = (newChecklist: ChecklistData) => {
-    setChecklist(newChecklist);
+  // Manage simple items list
+  const saveItems = (newItems: SimpleItem[]) => {
+    setItems(newItems);
     const currentBarangay = barangayHistory[0]?.code;
     if (currentBarangay) {
-      localStorage.setItem(`checklist_${currentBarangay}`, JSON.stringify(newChecklist));
+      localStorage.setItem(`checklist_items_${currentBarangay}`, JSON.stringify(newItems));
     }
   };
 
-  const openChecklistModal = (priority: 'high' | 'medium' | 'low') => {
-    setChecklistModalPriority(priority);
-    setChecklistItemText("");
-    setShowChecklistModal(true);
+  const addItem = (text: string, qty: number) => {
+    if (!text.trim()) return;
+    const newItem: SimpleItem = { id: `it-${Date.now()}-${Math.random()}`, text: text.trim(), qty: qty || 1 };
+    saveItems([...items, newItem]);
   };
 
-  const addChecklistItem = (priority: 'high' | 'medium' | 'low', text: string) => {
-    if (!text.trim()) return;
-    if (checklist[priority].length >= 15) {
-      alert(`Maximum 15 items allowed for ${priority} priority`);
+  const updateItem = (id: string, fields: Partial<SimpleItem>) => {
+    saveItems(items.map(it => (it.id === id ? { ...it, ...fields } : it)));
+  };
+
+  const deleteItem = (id: string) => {
+    saveItems(items.filter(it => it.id !== id));
+  };
+
+  // When focused barangay changes, reload items for that barangay
+  useEffect(() => {
+    const currentBarangay = barangayHistory[0]?.code;
+    if (!currentBarangay) {
+      setItems([]);
       return;
     }
-    
-    const newItem: ChecklistItem = {
-      id: `${priority}-${Date.now()}-${Math.random()}`,
-      text: text.trim(),
-      checked: false,
-    };
-    
-    saveChecklist({
-      ...checklist,
-      [priority]: [...checklist[priority], newItem],
-    });
-    
-    setShowChecklistModal(false);
-    setChecklistItemText("");
-  };
-
-  const toggleChecklistItem = (priority: 'high' | 'medium' | 'low', id: string) => {
-    saveChecklist({
-      ...checklist,
-      [priority]: checklist[priority].map(item =>
-        item.id === id ? { ...item, checked: !item.checked } : item
-      ),
-    });
-  };
-
-  const deleteChecklistItem = (priority: 'high' | 'medium' | 'low', id: string) => {
-    saveChecklist({
-      ...checklist,
-      [priority]: checklist[priority].filter(item => item.id !== id),
-    });
-  };
+    const stored = localStorage.getItem(`checklist_items_${currentBarangay}`);
+    if (stored) {
+      try {
+        setItems(JSON.parse(stored));
+      } catch {
+        setItems([]);
+      }
+    } else {
+      setItems([]);
+    }
+    // load co-responder preference for this barangay
+    try {
+      const coRaw = localStorage.getItem(`co_responder_${currentBarangay}`);
+      if (coRaw) {
+        const parsedCo = JSON.parse(coRaw);
+        setCoResponderEnabled(Boolean(parsedCo.enabled));
+        setCoResponderQty(typeof parsedCo.qty === 'number' ? parsedCo.qty : 1);
+      } else {
+        setCoResponderEnabled(false);
+        setCoResponderQty(1);
+      }
+    } catch {
+      setCoResponderEnabled(false);
+      setCoResponderQty(1);
+    }
+  }, [barangayHistory]);
 
   if (authLoading) {
     return (
@@ -395,7 +415,7 @@ export const Account = (): JSX.Element => {
   }
 
   return (
-    <div className="bg-white w-full min-h-screen">
+    <div className="bg-white w-full min-h-screen overflow-hidden">
       {/* Header copied from FirstPage (logo on left, fixed) */}
       <header className="fixed top-0 left-0 w-full h-18 md:h-20 lg:h-24 z-[4000] bg-black shadow-none border-b-0 flex items-center">
         <div className="pl-4 md:pl-6 lg:pl-8">
@@ -550,37 +570,18 @@ export const Account = (): JSX.Element => {
                      </button>
                    </div>
     
-                   <div className="grid grid-cols-2 gap-2 text-left max-w-xl mx-auto mb-2">
-                     {currentPrediction ? (
-                       <>
-                         <div className="bg-white rounded p-2 border border-gray-300">
-                           <div className="text-xs text-gray-600 font-medium">Population (30min)</div>
-                           <div className="text-sm font-semibold text-gray-900">{currentPrediction.pop_30min ?? "N/A"}</div>
-                         </div>
-                         
-                         <div className="bg-white rounded p-2 border border-gray-300">
-                           <div className="text-xs text-gray-600 font-medium">Wealth (mean)</div>
-                           <div className="text-sm font-semibold text-gray-900">{currentPrediction.wealth_mean ?? "N/A"}</div>
-                         </div>
-                         
-                         <div className="bg-white rounded p-2 border border-gray-300">
-                           <div className="text-xs text-gray-600 font-medium">Wealth (std)</div>
-                           <div className="text-sm font-semibold text-gray-900">{currentPrediction.wealth_std ?? "N/A"}</div>
-                         </div>
-                         
-                         <div className="bg-white rounded p-2 border border-gray-300">
-                           <div className="text-xs text-gray-600 font-medium">Disease risk</div>
-                           <div className="text-sm font-semibold text-gray-900">{currentPrediction.disease_risk ?? "N/A"}</div>
-                         </div>
-                       </>
-                     ) : (
-                       <div className="col-span-2 text-center text-gray-500 text-sm">No prediction data available</div>
-                     )}
-                   </div>
+                   
                    
                    <div className="text-xs text-gray-500 mb-2">
                      Last updated: {new Date(barangayHistory[0].timestamp).toLocaleDateString()}
                    </div>
+                  {blockedClaimant && (
+                    <div className="max-w-3xl mx-auto mb-4">
+                      <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+                        This barangay is currently claimed by <span className="font-semibold">{blockedClaimant}</span>. You cannot manage it here.
+                      </div>
+                    </div>
+                  )}
                  </>
                ) : (
                  <div className="text-base text-gray-500 mb-3">
@@ -589,129 +590,120 @@ export const Account = (): JSX.Element => {
                )}
  
                <div className="mt-2">
-                 <div className="bg-white rounded-2xl border-4 border-blue-300 p-3 shadow-inner h-[240px] flex flex-col">
-                   <h3 className="text-xl font-semibold mb-2 text-center flex-shrink-0">Checklist</h3>
-                   
-                   <div className="grid grid-cols-3 gap-3 flex-1 min-h-0">
-                     {/* High Priority Column */}
-                     <div className="flex flex-col min-h-0">
-                       <div className="bg-red-50 border-2 border-red-300 rounded-lg p-2 mb-2 flex-shrink-0">
-                         <h4 className="text-sm font-bold text-red-700 text-center">High Priority</h4>
-                       </div>
-                       <div className="flex-1 overflow-y-auto space-y-1 pr-1 min-h-0">
-                         {checklist.high.map((item) => (
-                           <div key={item.id} className="flex items-start gap-1 bg-red-50 p-1.5 rounded border border-red-200 flex-shrink-0">
-                             <input
-                               type="checkbox"
-                               checked={item.checked}
-                               onChange={() => toggleChecklistItem('high', item.id)}
-                               className="mt-0.5 flex-shrink-0"
-                             />
-                             <span className={`text-xs flex-1 break-words ${item.checked ? 'line-through text-gray-400' : 'text-gray-700'}`}>
-                               {item.text}
-                             </span>
-                             <button
-                               onClick={() => deleteChecklistItem('high', item.id)}
-                               className="text-red-500 hover:text-red-700 text-xs flex-shrink-0"
-                             >
-                               ✕
-                             </button>
+                 <div className="mb-4 max-w-3xl mx-auto">
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                     <div className="w-full">
+                       {currentPrediction ? (
+                         <div className="bg-white rounded p-4 border border-gray-300">
+                           <div className="text-xs text-gray-600 font-medium">Vulnerability</div>
+                           <div className="flex items-baseline gap-3 justify-center mt-2">
+                             <div className="text-3xl font-bold text-red-600">
+                               {typeof currentPrediction.proxy_risk_score === 'number' ? `${Math.round(currentPrediction.proxy_risk_score * 100)}%` : 'N/A'}
+                             </div>
+                             <div className="text-sm text-gray-700">
+                               {(() => {
+                                 const labels = ['Low', 'Medium', 'High', 'Very High'];
+                                 const idx = typeof currentPrediction.predicted_risk_level === 'number' ? currentPrediction.predicted_risk_level : null;
+                                 return idx !== null && labels[idx] ? labels[idx] : (typeof currentPrediction.proxy_risk_score === 'number' ? (currentPrediction.proxy_risk_score > 0.75 ? 'Very High' : currentPrediction.proxy_risk_score > 0.5 ? 'High' : currentPrediction.proxy_risk_score > 0.25 ? 'Medium' : 'Low') : 'N/A');
+                               })()}
+                             </div>
                            </div>
-                         ))}
-                       </div>
-                       {checklist.high.length < 15 && (
-                         <button
-                           onClick={() => openChecklistModal('high')}
-                           className="mt-2 text-xs bg-red-100 hover:bg-red-200 text-red-700 py-1 px-2 rounded flex-shrink-0"
-                         >
-                           + Add ({checklist.high.length}/15)
-                         </button>
+                           {currentPrediction.predicted_risk_confidence ? (
+                             <div className="text-xs text-gray-500 mt-2">Model confidence: {Math.round((currentPrediction.predicted_risk_confidence || 0) * 100)}%</div>
+                           ) : null}
+                           <div className="text-xs text-gray-500 mt-2">This is an estimated vulnerability score computed from local data.</div>
+                         </div>
+                       ) : (
+                         <div className="text-center text-gray-500">No vulnerability data available for the selected barangay.</div>
                        )}
                      </div>
 
-                     {/* Medium Priority Column */}
-                     <div className="flex flex-col min-h-0">
-                       <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-2 mb-2 flex-shrink-0">
-                         <h4 className="text-sm font-bold text-yellow-700 text-center">Medium Priority</h4>
-                       </div>
-                       <div className="flex-1 overflow-y-auto space-y-1 pr-1 min-h-0">
-                         {checklist.medium.map((item) => (
-                           <div key={item.id} className="flex items-start gap-1 bg-yellow-50 p-1.5 rounded border border-yellow-200 flex-shrink-0">
-                             <input
-                               type="checkbox"
-                               checked={item.checked}
-                               onChange={() => toggleChecklistItem('medium', item.id)}
-                               className="mt-0.5 flex-shrink-0"
-                             />
-                             <span className={`text-xs flex-1 break-words ${item.checked ? 'line-through text-gray-400' : 'text-gray-700'}`}>
-                               {item.text}
-                             </span>
-                             <button
-                               onClick={() => deleteChecklistItem('medium', item.id)}
-                               className="text-yellow-600 hover:text-yellow-800 text-xs flex-shrink-0"
-                             >
-                               ✕
-                             </button>
-                           </div>
-                         ))}
-                       </div>
-                       {checklist.medium.length < 15 && (
-                         <button
-                           onClick={() => openChecklistModal('medium')}
-                           className="mt-2 text-xs bg-yellow-100 hover:bg-yellow-200 text-yellow-700 py-1 px-2 rounded flex-shrink-0"
-                         >
-                           + Add ({checklist.medium.length}/15)
-                         </button>
-                       )}
-                     </div>
+                     <div className="w-full">
+                       <div className="bg-white rounded p-4 border border-gray-300">
+                         <div className="text-sm font-medium mb-2">Request Backup</div>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={coResponderEnabled}
+                            disabled={!!blockedClaimant}
+                            onChange={(e) => {
+                              if (blockedClaimant) return;
+                              const en = e.target.checked;
+                              setCoResponderEnabled(en);
+                              const currentBarangay = barangayHistory[0]?.code;
+                              if (currentBarangay) localStorage.setItem(`co_responder_${currentBarangay}`, JSON.stringify({ enabled: en, qty: coResponderQty }));
+                            }}
+                          />
+                          <span>{blockedClaimant ? 'Ask for backup (disabled)' : 'Ask for backup'}</span>
+                        </label>
 
-                     {/* Low Priority Column */}
-                     <div className="flex flex-col min-h-0">
-                       <div className="bg-green-50 border-2 border-green-300 rounded-lg p-2 mb-2 flex-shrink-0">
-                         <h4 className="text-sm font-bold text-green-700 text-center">Low Priority</h4>
+                         <div className="mt-3 text-sm">
+                           <label className="block text-xs text-gray-500">Number of co-responders (max 3)</label>
+                           <input
+                             type="number"
+                             min={1}
+                             max={3}
+                             value={coResponderQty}
+                             disabled={!coResponderEnabled || !!blockedClaimant}
+                             onChange={(e) => {
+                               if (blockedClaimant) return;
+                               let v = parseInt(e.target.value || '1', 10) || 1;
+                               if (v > 3) v = 3;
+                               if (v < 1) v = 1;
+                               setCoResponderQty(v);
+                               const currentBarangay = barangayHistory[0]?.code;
+                               if (currentBarangay) localStorage.setItem(`co_responder_${currentBarangay}`, JSON.stringify({ enabled: coResponderEnabled, qty: v }));
+                             }}
+                             className="w-full rounded-md border p-2 mt-1 text-sm"
+                           />
+                         </div>
+
+                         <div className="text-xs text-gray-400 mt-3">Enabling shows Request Backup on Home.</div>
                        </div>
-                       <div className="flex-1 overflow-y-auto space-y-1 pr-1 min-h-0">
-                         {checklist.low.map((item) => (
-                           <div key={item.id} className="flex items-start gap-1 bg-green-50 p-1.5 rounded border border-green-200 flex-shrink-0">
-                             <input
-                               type="checkbox"
-                               checked={item.checked}
-                               onChange={() => toggleChecklistItem('low', item.id)}
-                               className="mt-0.5 flex-shrink-0"
-                             />
-                             <span className={`text-xs flex-1 break-words ${item.checked ? 'line-through text-gray-400' : 'text-gray-700'}`}>
-                               {item.text}
-                             </span>
-                             <button
-                               onClick={() => deleteChecklistItem('low', item.id)}
-                               className="text-green-600 hover:text-green-800 text-xs flex-shrink-0"
-                             >
-                               ✕
-                             </button>
-                           </div>
-                         ))}
-                       </div>
-                       {checklist.low.length < 15 && (
-                         <button
-                           onClick={() => openChecklistModal('low')}
-                           className="mt-2 text-xs bg-green-100 hover:bg-green-200 text-green-700 py-1 px-2 rounded flex-shrink-0"
-                         >
-                           + Add ({checklist.low.length}/15)
-                         </button>
-                       )}
                      </div>
                    </div>
                  </div>
-               </div>
- 
-               {/* bottom action (align to the right) */}
-               <div className="flex justify-end mt-3">
-                 <button
-                   onClick={goBack}
-                   className="bg-blue-700 hover:bg-sky-300 text-white px-6 py-2 rounded-full shadow-sm hover:opacity-95"
-                 >
-                   Go Back
-                 </button>
+
+                 <div className="bg-white rounded-2xl border-4 border-blue-300 p-4 shadow-inner flex flex-col md:h-56 overflow-hidden">
+                   <h3 className="text-xl font-semibold mb-2 text-center">Checklist</h3>
+                   <div className="max-w-2xl mx-auto w-full">
+                     <div className="flex gap-2 mb-3">
+                       <input type="text" placeholder="Item description" className="flex-1 rounded-md border p-2 text-sm" id="new-item-text" />
+                       <input type="number" min={1} defaultValue={1} className="w-20 rounded-md border p-2 text-sm" id="new-item-qty" />
+                       <button
+                         onClick={() => {
+                           const txt = (document.getElementById('new-item-text') as HTMLInputElement)?.value || '';
+                           const q = parseInt((document.getElementById('new-item-qty') as HTMLInputElement)?.value || '1', 10) || 1;
+                           if (txt.trim()) {
+                             addItem(txt, q);
+                             (document.getElementById('new-item-text') as HTMLInputElement).value = '';
+                             (document.getElementById('new-item-qty') as HTMLInputElement).value = '1';
+                           }
+                         }}
+                         className="px-3 py-2 bg-blue-600 text-white rounded-md text-sm"
+                       >Add</button>
+                     </div>
+
+                     <div className="space-y-2 max-h-40 overflow-y-auto">
+                       {items.length === 0 ? (
+                         <div className="text-sm text-gray-500 text-center">No items yet. Add a task and quantity.</div>
+                       ) : (
+                         items.map((it) => (
+                           <div key={it.id} className="flex items-center gap-2 p-2 border rounded-md">
+                             <input
+                               value={it.text}
+                               onChange={(e) => updateItem(it.id, { text: e.target.value })}
+                               className="flex-1 rounded-md border p-1 text-sm"
+                             />
+                             <input
+                               type="number"
+                               min={1}
+                               value={it.qty}
+                               onChange={(e) => updateItem(it.id, { qty: parseInt(e.target.value || '1', 10) || 1 })}
+                               className="w-20 rounded-md border p-1 text-sm"
+                             />
+                             <button onClick={() => deleteItem(it.id)} className="text-red-600 px-2">Remove</button>
+                           </div>
                </div>
             </section>
           </div>
@@ -838,81 +830,6 @@ export const Account = (): JSX.Element => {
     </div>
   </div>
 )}
-
-      {/* Add Checklist Item Modal */}
-      {showChecklistModal && (
-        <div
-          className="fixed inset-0 z-[3300] flex items-center justify-center bg-black/30"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setShowChecklistModal(false)}
-        >
-          <div
-            className="relative w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl
-                       transform transition-all duration-300 ease-out scale-100 opacity-100"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              position: "absolute",
-            }}
-          >
-            <h3 className="text-lg font-semibold mb-4">
-              Add {checklistModalPriority.charAt(0).toUpperCase() + checklistModalPriority.slice(1)} Priority Task
-            </h3>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-gray-700 block mb-2">
-                  Task Description
-                </label>
-                <textarea
-                  value={checklistItemText}
-                  onChange={(e) => setChecklistItemText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      if (checklistItemText.trim()) {
-                        addChecklistItem(checklistModalPriority, checklistItemText);
-                      }
-                    }
-                  }}
-                  className="w-full rounded-md border border-gray-300 shadow-sm p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  rows={3}
-                  placeholder="Enter task description..."
-                  autoFocus
-                />
-              </div>
-              <div className="flex justify-end gap-2">
-                <button
-                  onClick={() => {
-                    setShowChecklistModal(false);
-                    setChecklistItemText("");
-                  }}
-                  className="px-4 py-2 rounded-md bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    if (checklistItemText.trim()) {
-                      addChecklistItem(checklistModalPriority, checklistItemText);
-                    }
-                  }}
-                  disabled={!checklistItemText.trim()}
-                  className={`px-4 py-2 rounded-md text-white text-sm font-medium ${
-                    checklistModalPriority === 'high' ? 'bg-red-600 hover:bg-red-700' :
-                    checklistModalPriority === 'medium' ? 'bg-yellow-600 hover:bg-yellow-700' :
-                    'bg-green-600 hover:bg-green-700'
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
-                  Add Task
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );
