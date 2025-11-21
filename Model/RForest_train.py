@@ -2,10 +2,6 @@
 # RANDOM FOREST TRAINING ALGORITHM
 # ===========================================
 import os
-try:
-    import jobplot
-except Exception:
-    jobplot = None
 from pathlib import Path
 import numpy as np
 import pandas as pd

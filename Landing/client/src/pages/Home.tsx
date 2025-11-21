@@ -70,6 +70,11 @@ function getLatLonForCode(code: string): { lat: number; lon: number } {
   const u = ((h >>> 7) % 100000) / 100000;
   // Use Metro Manila bounds for deterministic placement so ADM4 area codes
   // land within Metro Manila (Navotas, Mandaluyong, Muntinlupa, etc.). When
+              <div className="text-xs text-gray-500 mt-2">
+                <div className="font-medium">Quick note about the two numbers you see:</div>
+                <div>- <strong>Proxy score</strong> is the summed contributions from the table (a 0–1 score we created to rank places).</div>
+                <div>- <strong>Model confidence</strong> (e.g. 0.99) is the Random Forest's probability for the class it predicted — it measures how sure the classifier is about its class label, not the proxy score.</div>
+              </div>
   // real CSV centroids are available we will prefer them instead.
   const lat = METRO_MANILA_BOUNDS.minLat + t * (METRO_MANILA_BOUNDS.maxLat - METRO_MANILA_BOUNDS.minLat);
   const lon = METRO_MANILA_BOUNDS.minLon + u * (METRO_MANILA_BOUNDS.maxLon - METRO_MANILA_BOUNDS.minLon);
@@ -126,6 +131,8 @@ export const Home = (): JSX.Element => {
       window.history.replaceState({}, '', '/home');
     }
   }, []);
+
+  
 
 
   function MapViewUpdater({ center }: { center: { lat: number; lon: number } }) {
@@ -205,6 +212,10 @@ export const Home = (): JSX.Element => {
   // New state to load and hold prediction data for a searched adm4 code
   const [toReceiveData, setToReceiveData] = useState<SupplyPrediction[] | null>(null);
   const [selectedPrediction, setSelectedPrediction] = useState<SupplyPrediction | null>(null);
+  const [riskMap, setRiskMap] = useState<Record<string, { level: number; confidence: number; proxy?: number }>>({});
+  const [topUnclaimed, setTopUnclaimed] = useState<Array<{ adm4_pcode: string; proxy?: number; level?: number; confidence?: number }>>([]);
+  const [riskModelMeta, setRiskModelMeta] = useState<any | null>(null);
+  
   // Legend / layer toggles
   const [showAreaCircles, setShowAreaCircles] = useState<boolean>(true);
   const [showPoiLabels, setShowPoiLabels] = useState<boolean>(false);
@@ -216,6 +227,172 @@ export const Home = (): JSX.Element => {
   const [currentBarangayClaim, setCurrentBarangayClaim] = useState<{claimed: boolean, claimant?: string} | null>(null);
   // Error modal for claiming multiple barangays
   const [showClaimLimitModal, setShowClaimLimitModal] = useState<boolean>(false);
+
+  // compute top 3 unclaimed vulnerable barangays whenever riskMap or barangayClaims changes
+  useEffect(() => {
+    if (!riskMap || Object.keys(riskMap).length === 0) {
+      setTopUnclaimed([]);
+      return;
+    }
+    const arr = Object.entries(riskMap).map(([adm4_pcode, v]) => ({ adm4_pcode, level: v.level, confidence: v.confidence, proxy: v.proxy }));
+    // filter out claimed barangays
+    const unclaimed = arr.filter(a => !barangayClaims || !Object.prototype.hasOwnProperty.call(barangayClaims, a.adm4_pcode));
+    // sort by proxy score desc (use proxy if available), fallback to level then confidence
+    unclaimed.sort((a, b) => {
+      const ap = (a.proxy != null) ? a.proxy : ((a.level != null) ? a.level / 3 : 0);
+      const bp = (b.proxy != null) ? b.proxy : ((b.level != null) ? b.level / 3 : 0);
+      if (bp !== ap) return bp - ap;
+      if (b.level !== a.level) return b.level - a.level;
+      return (b.confidence || 0) - (a.confidence || 0);
+    });
+    setTopUnclaimed(unclaimed.slice(0, 3));
+  }, [riskMap, barangayClaims]);
+
+  // New state to load and hold prediction data for a searched adm4 code
+  const [explain, setExplain] = useState<null | {
+    features: Array<{ name: string; raw: number; norm: number; weight: number; contrib: number }>;
+    proxy: number;
+    label: string;
+  }>(null);
+
+  // Friendly labels for features to show plain-language names in the UI
+  const featureFriendlyLabels: Record<string, string> = {
+    inv_wealth: 'Wealth (lower is worse)',
+    low_health_access: 'Health access (lower is worse)',
+    inform_vulnerability: 'Inform vulnerability',
+    lack_of_coping: 'Lack of coping capacity',
+    inform_risk_index: 'INFORM risk index',
+    vuln_food: 'Food vulnerability',
+    vuln_health: 'Health vulnerability',
+    vuln_water: 'Water vulnerability',
+    storms_2024: 'Recent storm frequency',
+    wealth_mean: 'Wealth (mean)',
+    wealth_std: 'Wealth (std dev)',
+    pop_30min: 'Population (within 30min)',
+    access_pct_30min: 'Access % (30min)',
+    climate_rainfall: 'Climate rainfall',
+    disease_risk: 'Disease risk'
+  };
+
+  function humanJoin(list: string[]) {
+    if (!list || list.length === 0) return '';
+    if (list.length === 1) return list[0];
+    if (list.length === 2) return `${list[0]} and ${list[1]}`;
+    return `${list.slice(0, -1).join(', ')}, and ${list[list.length - 1]}`;
+  }
+
+  useEffect(() => {
+    if (!selectedBarangay) {
+      setExplain(null);
+      return;
+    }
+    // If we have exact model metadata, use it to compute exact normalized values and contributions.
+    if (riskModelMeta && Array.isArray(riskModelMeta.features) && Array.isArray(riskModelMeta.proxy_weights)) {
+      const feats = riskModelMeta.features as string[];
+      const weights = riskModelMeta.proxy_weights as number[];
+
+      // find transformed feature values for this barangay if available
+      const pv = Array.isArray(riskModelMeta.proxy_feature_values) ? riskModelMeta.proxy_feature_values.find((r: any) => String(r.adm4_pcode) === String(selectedBarangay)) : null;
+
+      // fallback: try toReceiveData/raw row if proxy_feature_values not present for this adm4
+      const rawRow = pv || ((Array.isArray(toReceiveData) && toReceiveData.find(r => String(r.adm4_pcode) === String(selectedBarangay))) || riskMap[selectedBarangay]);
+      if (!rawRow) {
+        setExplain(null);
+        return;
+      }
+
+      // scaler mins/max for transformed features (these align with feats order)
+      const mins = (riskModelMeta.proxy_scaler_data_min || []).slice();
+      const maxs = (riskModelMeta.proxy_scaler_data_max || []).slice();
+
+      const featuresOut: Array<{ name: string; raw: number; norm: number; weight: number; contrib: number }> = [];
+      let proxy = 0;
+      for (let i = 0; i < feats.length; i++) {
+        const f = feats[i];
+        // raw transformed value may be present in pv (proxy_feature_values) under same key
+        let rawVal = Number(rawRow[f] ?? rawRow[f.replace(/^inv_/, '')] ?? 0);
+        // If the meta provided transformed values, we use them directly. Otherwise attempt simple transforms
+        if (!pv) {
+          // attempt to reconstruct common transforms
+          if (f === 'inv_wealth' && rawRow['wealth_mean'] !== undefined) {
+            rawVal = 1 - Number(rawRow['wealth_mean'] ?? 0);
+          } else if (f === 'low_health_access' && rawRow['brgy_healthcenter_pop_reached_30min'] !== undefined) {
+            const val = Number(rawRow['brgy_healthcenter_pop_reached_30min'] ?? 0);
+            // approximate max used during training by using max in toReceiveData if available
+            const maxVal = Array.isArray(toReceiveData) && toReceiveData.length ? Math.max(...toReceiveData.map(d => Number(d['brgy_healthcenter_pop_reached_30min'] ?? 0))) : (val || 1);
+            rawVal = 1 - (val / (maxVal + 1));
+          }
+
+          // other transformations may be dataset-specific; if we can't compute, use 0
+        }
+
+        const mn = (mins && mins[i] != null) ? Number(mins[i]) : 0;
+        const mx = (maxs && maxs[i] != null) ? Number(maxs[i]) : mn + 1;
+        const norm = (rawVal - mn) / Math.max(1e-9, (mx - mn));
+        const weight = Number(weights[i] ?? 0);
+        const contrib = norm * weight;
+        proxy += contrib;
+        featuresOut.push({ name: f, raw: rawVal, norm: Math.max(0, Math.min(1, norm)), weight, contrib });
+      }
+
+      // map proxy 0..1 to label using stored quartile edges
+      const edges = Array.isArray(riskModelMeta.proxy_quartile_edges) ? riskModelMeta.proxy_quartile_edges : [0.25, 0.5, 0.75];
+      const label = proxy < edges[0] ? 'Low' : proxy < edges[1] ? 'Medium' : proxy < edges[2] ? 'High' : 'Very High';
+      setExplain({ features: featuresOut, proxy, label });
+      return;
+    }
+
+    // fallback legacy behavior (no exact meta available)
+    // features used in training/proxy computation
+    const feats = ['wealth_mean','wealth_std','pop_30min','access_pct_30min','climate_rainfall','disease_risk'];
+    const weights = [0.25,0.05,0.25,0.2,0.125,0.125];
+
+    // prefer toReceiveData rows (they include feature columns), else try riskMap entries
+    const row = (Array.isArray(toReceiveData) && toReceiveData.find(r => String(r.adm4_pcode) === String(selectedBarangay))) || riskMap[selectedBarangay];
+    if (!row) {
+      setExplain(null);
+      return;
+    }
+
+    // compute min/max across dataset for normalization if possible
+    const dataset = Array.isArray(toReceiveData) && toReceiveData.length > 0 ? toReceiveData : null;
+    const mins: Record<string, number> = {};
+    const maxs: Record<string, number> = {};
+    if (dataset) {
+      for (const f of feats) {
+        const vals = dataset.map(d => Number(d[f] ?? 0)).filter(v => !Number.isNaN(v));
+        mins[f] = vals.length ? Math.min(...vals) : 0;
+        maxs[f] = vals.length ? Math.max(...vals) : mins[f] + 1;
+      }
+    }
+
+    const featuresOut: Array<{ name: string; raw: number; norm: number; weight: number; contrib: number }> = [];
+    let proxy = 0;
+    for (let i=0;i<feats.length;i++){
+      const f = feats[i];
+      const raw = Number(row[f] ?? 0);
+      let norm = 0;
+      if (dataset) {
+        const mn = mins[f];
+        const mx = maxs[f];
+        norm = (raw - mn) / (Math.max(1e-9, mx - mn));
+      } else {
+        // fallback normalization heuristics
+        if (f.includes('wealth')) norm = 1 - Math.min(Math.max(raw,0),1); // wealth: lower wealth => higher risk
+        else if (f.includes('pop')) norm = Math.min(raw / 50000, 1);
+        else if (f.includes('access')) norm = 1 - Math.min(Math.max(raw,0),100)/100;
+        else norm = Math.min(Math.max(raw,0)/100,1);
+      }
+      const weight = weights[i] ?? 0;
+      const contrib = norm * weight;
+      proxy += contrib;
+      featuresOut.push({ name: f, raw, norm, weight, contrib });
+    }
+
+    // map proxy 0..1 to label (quantiles used in training, approximate here)
+    const label = proxy < 0.25 ? 'Low' : proxy < 0.5 ? 'Medium' : proxy < 0.75 ? 'High' : 'Very High';
+    setExplain({ features: featuresOut, proxy, label });
+  }, [selectedBarangay, toReceiveData, riskMap, riskModelMeta]);
 
   // Load typhoon GeoJSON and barangay CSV from frontend `public/data/`.
   // These populate `typhoonTrack` and `brgyPoints` state respectively.
@@ -283,6 +460,18 @@ export const Home = (): JSX.Element => {
         // ignore
       }
     })();
+
+      // fetch model metadata (normalizer + weights) for exact explainability, if present
+      (async () => {
+        try {
+          const resp = await fetch('/data/risk_model_meta.json');
+          if (!resp.ok) return;
+          const meta = await resp.json();
+          setRiskModelMeta(meta);
+        } catch (err) {
+          // ignore
+        }
+      })();
   }, []);
 
   // Utility: Haversine distance in meters
@@ -776,6 +965,7 @@ export const Home = (): JSX.Element => {
 
   const handleSelectSuggestion = (s: { id: string; name: string; lat: number; lon: number }) => {
     setMapCenter({ lat: s.lat, lon: s.lon });
+    setMapZoom(15);
     setSearchQuery(s.name);
     setShowSuggestions(false);
   };
@@ -785,6 +975,7 @@ export const Home = (): JSX.Element => {
     if (!adm) return;
     // set selected barangay and supplies
     setSelectedBarangay(adm.adm4_pcode || "");
+    setMapZoom(17);
     try {
       categorizeSupplies(adm);
     } catch (err) {
@@ -804,6 +995,7 @@ export const Home = (): JSX.Element => {
         const data = await resp.json();
         if (data.lat && data.lon) {
           setMapCenter({ lat: data.lat, lon: data.lon });
+          setMapZoom(18);
         }
       }
     } catch (err) {
@@ -834,6 +1026,34 @@ export const Home = (): JSX.Element => {
       } catch (err) {
         console.warn("Failed to load ToReceive.json", err);
         setToReceiveData([]);
+      }
+    })();
+  }, []);
+
+  // load risk predictions CSV from public data
+  useEffect(() => {
+    (async () => {
+      try {
+        const resp = await fetch('/data/risk_predictions.csv');
+        if (!resp.ok) return;
+        const txt = await resp.text();
+        const lines = txt.split(/\r?\n/).filter(Boolean);
+        const map: Record<string, { level: number; confidence: number; proxy?: number }> = {};
+        for (let i = 1; i < lines.length; i++) {
+          const row = lines[i].trim();
+          if (!row) continue;
+          // naive CSV parse: adm4_pcode may be quoted and fields are: adm4_pcode,proxy_risk_score,predicted_risk_level,predicted_risk_confidence
+          // split on comma but allow quoted values
+          const parts = row.split(',');
+          const code = parts[0].replace(/^"|"$/g, '').trim();
+          const proxy = parts[1] ? Number(parts[1]) : NaN;
+          const level = parts[2] ? Number(parts[2]) : NaN;
+          const conf = parts[3] ? Number(parts[3]) : NaN;
+          if (code) map[code] = { level: Number.isFinite(level) ? level : 0, confidence: Number.isFinite(conf) ? conf : 0, proxy: Number.isFinite(proxy) ? proxy : undefined };
+        }
+        setRiskMap(map);
+      } catch (err) {
+        // ignore
       }
     })();
   }, []);
@@ -1006,7 +1226,9 @@ export const Home = (): JSX.Element => {
                   {isSearching ? "..." : "→"}
                 </button>
               </div>
-            </div>
+                </div>
+
+                {/* Explainability moved below Vulnerability Ranking (near Legend) */}
             {showSuggestions && suggestions.length > 0 && (
               <div className="absolute left-0 right-0 mt-2 w-full max-h-52 overflow-y-auto bg-white border border-gray-200 rounded-lg z-50 shadow-lg">
                 {suggestions.map((s) => (
@@ -1200,6 +1422,44 @@ export const Home = (): JSX.Element => {
                   )}
                 </div>
               )}
+
+                {/* Top-3 most vulnerable unclaimed barangays (live) - now sorted by proxy score */}
+                <div className="mt-4">
+                  <h4 className="text-sm font-semibold mb-2">Top vulnerable unclaimed barangays</h4>
+                  <div className="space-y-2">
+                    {topUnclaimed.length === 0 ? (
+                      <div className="text-xs text-gray-500">Loading or none available</div>
+                    ) : (
+                      topUnclaimed.map((t) => {
+                        const score = Number(t.proxy ?? 0);
+                        const pct = Math.round(score * 100);
+                        const label = score >= 0.75 ? 'Very High' : score >= 0.5 ? 'High' : score >= 0.25 ? 'Medium' : 'Low';
+                        return (
+                          <button
+                            key={t.adm4_pcode}
+                            onClick={() => {
+                              setSearchQuery(t.adm4_pcode);
+                              setSelectedBarangay(t.adm4_pcode);
+                              // attempt to focus map
+                              const matched = displayCenters.find((d) => (d.adm4_pcode || '').toLowerCase() === (t.adm4_pcode || '').toLowerCase());
+                              if (matched) {
+                                setMapCenter({ lat: matched.lat, lon: matched.lon });
+                                setMapZoom(18);
+                              }
+                            }}
+                            className="w-full text-left p-2 bg-white rounded border hover:bg-gray-50 flex items-center justify-between"
+                          >
+                            <div>
+                              <div className="font-medium text-sm">{t.adm4_pcode}</div>
+                              <div className="text-xs text-gray-500">Risk: {label}</div>
+                            </div>
+                            <div className="text-sm font-semibold text-red-600">{pct}%</div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
             </div>
           </div>
 
@@ -1242,113 +1502,104 @@ export const Home = (): JSX.Element => {
             ))}
           </div>
 
-
-          {/* Prediction summary moved above Needs */}
-          {!selectedPrediction ? (
-            <aside className="mt-2 mb-6 max-w-lg bg-gray-50 border-2 border-dashed border-gray-300 p-4 rounded-lg text-center text-base md:text-lg text-gray-500">
-              Please search first
-            </aside>
-          ) : (
-            <aside className="mt-2 mb-6 max-w-lg bg-white p-4 rounded-lg shadow-md overflow-auto">
-              <h3 className="text-lg font-semibold mb-2">Prediction — {selectedPrediction.adm4_pcode}</h3>
-              <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-                <div className="font-medium">Population (30min)</div><div>{selectedPrediction.pop_30min ?? "N/A"}</div>
-                <div className="font-medium">Wealth (mean)</div><div>{selectedPrediction.wealth_mean ?? "N/A"}</div>
-                <div className="font-medium">Wealth (std)</div><div>{selectedPrediction.wealth_std ?? "N/A"}</div>
-                <div className="font-medium">Access % (30min)</div><div>{selectedPrediction.access_pct_30min ?? "N/A"}</div>
-                <div className="font-medium">Disease risk</div><div>{selectedPrediction.disease_risk ?? "N/A"}</div>
+          {/* Vulnerability ranking tab (small) - appears after Legend */}
+          <div className="mb-6">
+            <div className="bg-white rounded-lg p-3 border shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <div className="font-semibold">Vulnerability Ranking</div>
+                <div className="text-xs text-gray-500">Model</div>
               </div>
-
-
-              <h4 className="font-semibold mb-2">Top predicted needs</h4>
-              <ul className="list-disc pl-5 text-sm max-h-40 overflow-auto">
-                {Object.entries(selectedPrediction)
-                  .filter(([k]) => k.startsWith("pred_"))
-                  .sort((a, b) => (Number(b[1]) || 0) - (Number(a[1]) || 0))
-                  .slice(0, 8)
-                  .map(([k, v]) => (
-                    <li key={k} className="mb-1">
-                      <span className="capitalize">{k.replace("pred_", "").replace(/_/g, " ")}</span>: <span className="font-medium">{v}</span>
-                    </li>
-                  ))}
-              </ul>
-            </aside>
-          )}
-
-
-          {/* Needs Section */}
-          <p className="font-extrabold text-2xl md:text-3xl text-black tracking-tight mb-3">
-            Needs as of:
-          </p>
-         
-          {!selectedBarangay ? (
-            <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl p-8 text-center text-base md:text-lg text-gray-500">
-              Please search first
+              {selectedBarangay ? (
+                (() => {
+                  const r = riskMap[selectedBarangay] || riskMap[selectedBarangay.toUpperCase()];
+                  if (!r) return <div className="text-xs text-gray-500">No ranking available for {selectedBarangay}</div>;
+                  const labels = ['Low', 'Medium', 'High', 'Very High'];
+                  const colors = ['#10b981', '#f59e0b', '#ef4444', '#7f1d1d'];
+                  const lvl = Number(r.level) || 0;
+                  const proxy = (typeof r.proxy === 'number') ? r.proxy : (lvl / 3);
+                  const pct = Math.round((proxy || 0) * 100);
+                  const labelText = proxy >= 0.75 ? 'Very High' : proxy >= 0.5 ? 'High' : proxy >= 0.25 ? 'Medium' : 'Low';
+                  return (
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1">
+                        <div className="text-sm font-medium">{selectedBarangay}</div>
+                        <div className="text-xs text-gray-600">Score: {pct}% — {labelText}</div>
+                        {/* Show classifier prediction confidence explanation if we have meta */}
+                        {riskModelMeta && (typeof riskModelMeta.rf_n_estimators === 'number') && (
+                          <div className="text-xs text-gray-600">Model confidence: {(r.confidence || 0).toFixed(2)} — this means approximately <strong>{Math.round((r.confidence || 0) * (riskModelMeta.rf_n_estimators || 200))}</strong> out of <strong>{riskModelMeta.rf_n_estimators}</strong> trees voted for this class.</div>
+                        )}
+                      </div>
+                      <div className="text-white px-3 py-1 rounded" style={{ background: colors[lvl] || '#6b7280' }}>{pct}%</div>
+                    </div>
+                  );
+                })()
+              ) : (
+                <div className="text-xs text-gray-500">Select a barangay to view its ranking.</div>
+              )}
             </div>
-          ) : supplies ? (
-            <div className="space-y-6">
-              {/* Medical & Health Category */}
-              <div className="mb-6">
-                <h3 className="font-bold text-[32px] text-[#2563eb] mb-3">Medical & Health</h3>
-                <div className="space-y-2">
-                  {Object.entries(supplies.medical).map(([item, quantity]) => (
-                    <div key={item} className="bg-[#e3f2fd] border-[0.588px] border-solid border-[#2563eb] rounded-[37.607px] h-[60.737px] flex items-center justify-between px-6">
-                      <span className="text-[20px] capitalize">{item}</span>
-                      <span className="text-[24px] font-bold text-[#2563eb]">{quantity}</span>
-                    </div>
-                  ))}
+          </div>
+
+          {/* Explainability: show how the ranking was computed for selected barangay */}
+          {explain && (
+            <div className="mb-6">
+              <div className="bg-white border rounded-lg p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-semibold">How Ranking Was Computed</div>
+                  <div className="text-xs text-gray-500">Proxy model</div>
                 </div>
-              </div>
-
-
-              {/* Food & Nutrition Category */}
-              <div className="mb-6">
-                <h3 className="font-bold text-[32px] text-[#16a34a] mb-3">Food & Nutrition</h3>
-                <div className="space-y-2">
-                  {Object.entries(supplies.food).map(([item, quantity]) => (
-                    <div key={item} className="bg-[#f0fdf4] border-[0.588px] border-solid border-[#16a34a] rounded-[37.607px] h-[60.737px] flex items-center justify-between px-6">
-                      <span className="text-[20px] capitalize">{item}</span>
-                      <span className="text-[24px] font-bold text-[#16a34a]">{quantity}</span>
-                    </div>
-                  ))}
+                <div className="text-sm text-gray-700 mb-2">Proxy score: <span className="font-medium">{explain.proxy.toFixed(3)}</span> — Label: <span className="font-semibold">{explain.label}</span></div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-gray-500">
+                        <th className="pb-1">Factor</th>
+                        <th className="pb-1">Value</th>
+                        <th className="pb-1">Scaled (0–1)</th>
+                        <th className="pb-1">Importance</th>
+                        <th className="pb-1">Effect on score</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {explain.features.map(f => (
+                        <tr key={f.name} className="border-t">
+                          <td className="py-2 align-top">{featureFriendlyLabels[f.name] || f.name.replace(/_/g, ' ')}</td>
+                          <td className="py-2 align-top">{Number(f.raw).toFixed(2)}</td>
+                          <td className="py-2 align-top">{Number(f.norm).toFixed(3)}</td>
+                          <td className="py-2 align-top">{Number(f.weight).toFixed(3)}</td>
+                          <td className="py-2 align-top font-medium">
+                            <div>{Number(f.contrib).toFixed(3)}</div>
+                            <div className="text-xs text-gray-500">{Number(f.weight).toFixed(3)} × {Number(f.norm).toFixed(3)} = {Number((f.weight || 0) * (f.norm || 0)).toFixed(3)}</div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              </div>
-
-
-              {/* Shelter & Personal Relief Category */}
-              <div className="mb-6">
-                <h3 className="font-bold text-[32px] text-[#ca8a04] mb-3">Shelter & Personal Relief</h3>
-                <div className="space-y-2">
-                  {Object.entries(supplies.shelter).map(([item, quantity]) => (
-                    <div key={item} className="bg-[#fefce8] border-[0.588px] border-solid border-[#ca8a04] rounded-[37.607px] h-[60.737px] flex items-center justify-between px-6">
-                      <span className="text-[20px] capitalize">{item}</span>
-                      <span className="text-[24px] font-bold text-[#ca8a04]">{quantity}</span>
-                    </div>
-                  ))}
+                <div className="text-xs text-gray-500 mt-2">
+                  <div className="font-medium text-sm">Quick guide (plain English):</div>
+                  <ul className="text-xs text-gray-600 list-disc pl-5 mt-1">
+                    <li><strong>Value:</strong> the original measurement (e.g., population, wealth index).</li>
+                    <li><strong>Scaled (0–1):</strong> we convert different measurements to a common 0–1 range so they can be compared (1 means more risk).</li>
+                    <li><strong>Importance:</strong> how much this factor matters (bigger = more influence).</li>
+                    <li><strong>Effect on score:</strong> what this factor adds to the total risk (Importance × Scaled).</li>
+                  </ul>
+                  <div className="text-xs text-gray-500 mt-2">How the score is computed: we add up all the "Effect on score" numbers to get the proxy score (a number between 0 and 1), then map that to a label: Low / Medium / High / Very High.</div>
                 </div>
+                {/* Plain-language summary: show top contributors in simple English */}
+                {explain && explain.features && explain.features.length > 0 && (
+                  (() => {
+                    const sorted = [...explain.features].sort((a, b) => (b.contrib || 0) - (a.contrib || 0));
+                    const top = sorted.slice(0, 3).map(s => featureFriendlyLabels[s.name] || s.name.replace(/_/g, ' '));
+                    const sentence = `${explain.label} risk mainly because of ${humanJoin(top)}.`;
+                    return (<div className="mt-2 text-sm text-gray-700 font-medium">{sentence}</div>);
+                  })()
+                )}
               </div>
-
-
-              {/* Water & Sanitation Category */}
-              <div className="mb-6">
-                <h3 className="font-bold text-[32px] text-[#0891b2] mb-3">Water & Sanitation</h3>
-                <div className="space-y-2">
-                  {Object.entries(supplies.water).map(([item, quantity]) => (
-                    <div key={item} className="bg-[#ecfeff] border-[0.588px] border-solid border-[#0891b2] rounded-[37.607px] h-[60.737px] flex items-center justify-between px-6">
-                      <span className="text-[20px] capitalize">{item}</span>
-                      <span className="text-[24px] font-bold text-[#0891b2]">{quantity}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((i) => (
-                <div key={i} className="bg-[#d1d1d1] border-[0.588px] border-solid rounded-[37.607px] h-[60.737px]" />
-              ))}
             </div>
           )}
+
+
+          {/* Prediction and Needs sections removed as requested. */}
 
 
           {/* Duplicate bottom prediction removed — only the top prediction panel is shown */}

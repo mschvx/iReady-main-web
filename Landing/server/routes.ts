@@ -6,6 +6,11 @@ import bcrypt from "bcryptjs";
 import { insertUserSchema } from "@shared/schema";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
+
+// ESM environments don't provide __dirname by default. Compute it from import.meta.url
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const SESSION_SECRET = process.env.SESSION_SECRET || "dev-secret-change-me";
