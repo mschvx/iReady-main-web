@@ -126,6 +126,65 @@ def compute_min_distance_km_fallback(brgy_df, track_geojson_path):
     return pd.Series(dists, index=brgy_df.index)
 
 
+def try_extract_centroid_from_wkt(brgy_df):
+    """
+    Try to extract a centroid (lat, lon) from a WKT POLYGON/MULTIPOLYGON column.
+    If successful, returns a copy of brgy_df with added 'lat' and 'lon' columns.
+    Otherwise returns the original dataframe.
+    """
+    if brgy_df is None or brgy_df.empty:
+        return brgy_df
+
+    # find a column that contains 'POLYGON' or 'MULTIPOLYGON' text in at least one row
+    poly_col = None
+    for c in brgy_df.columns:
+        sample = brgy_df[c].astype(str).str.upper().fillna('')
+        if sample.str.contains('POLYGON').any():
+            poly_col = c
+            break
+
+    if poly_col is None:
+        return brgy_df
+
+    # parse simple WKT POLYGON((lon lat, lon lat, ...))
+    lats = []
+    lons = []
+    lat_list = []
+    lon_list = []
+    out = brgy_df.copy()
+    lat_vals = []
+    lon_vals = []
+    for val in out[poly_col].astype(str).fillna(''):
+        coords = []
+        try:
+            # extract everything between the first '((' and '))'
+            m = val.upper().split('((')
+            if len(m) < 2:
+                lat_vals.append(np.nan); lon_vals.append(np.nan); continue
+            body = m[1].split('))')[0]
+            parts = [p.strip() for p in body.split(',') if p.strip()]
+            pts = []
+            for p in parts:
+                pieces = p.split()
+                if len(pieces) >= 2:
+                    # WKT is lon lat
+                    lon = float(pieces[0])
+                    lat = float(pieces[1])
+                    pts.append((lat, lon))
+            if not pts:
+                lat_vals.append(np.nan); lon_vals.append(np.nan); continue
+            avg_lat = float(sum(p[0] for p in pts) / len(pts))
+            avg_lon = float(sum(p[1] for p in pts) / len(pts))
+            lat_vals.append(avg_lat)
+            lon_vals.append(avg_lon)
+        except Exception:
+            lat_vals.append(np.nan); lon_vals.append(np.nan)
+
+    out['lat'] = lat_vals
+    out['lon'] = lon_vals
+    return out
+
+
 def build_feature_table():
     # Load files
     hf = safe_read_csv(os.path.join(DATA_DIR, 'CCHAIN', 'health_facilities.csv'))
@@ -246,7 +305,21 @@ def build_feature_table():
         # If geopandas not available or failed, use haversine fallback
         if dist_km is None:
             try:
-                fallback = compute_min_distance_km_fallback(brgy, track_geojson)
+                # If brgy doesn't have explicit lat/lon columns, try to extract
+                # centroids from WKT POLYGON/MULTIPOLYGON text before fallback.
+                brgy_for_fallback = brgy
+                # try to add lat/lon if missing
+                has_lat = any('lat' in c.lower() for c in brgy_for_fallback.columns)
+                has_lon = any('lon' in c.lower() or 'lng' in c.lower() for c in brgy_for_fallback.columns)
+                if not (has_lat and has_lon):
+                    try:
+                        brgy_for_fallback = try_extract_centroid_from_wkt(brgy_for_fallback)
+                        has_lat = any('lat' in c.lower() for c in brgy_for_fallback.columns)
+                        has_lon = any('lon' in c.lower() or 'lng' in c.lower() for c in brgy_for_fallback.columns)
+                    except Exception:
+                        pass
+
+                fallback = compute_min_distance_km_fallback(brgy_for_fallback, track_geojson)
                 if fallback is not None:
                     brgy_copy = brgy.copy()
                     brgy_copy['dist_km_to_track'] = fallback.values
@@ -294,37 +367,75 @@ def compute_proxy_risk(df):
     if not features:
         raise RuntimeError('No features available to compute proxy risk')
 
-    X = df2[features].fillna(0).values.astype(float)
-    scaler = MinMaxScaler()
-    Xs = scaler.fit_transform(X)
+    # Build matrix of raw feature values (these are the derived features like inv_wealth, inv_dist)
+    X_raw = df2[features].fillna(0).values.astype(float)
+
+    # Detect constant features (zero variance) and drop them before fitting scaler.
+    # Constant features provide no discriminative power at the barangay level
+    # and lead to degenerate MinMax scaling (min == max). Removing them makes
+    # the proxy and downstream model focus on varying inputs.
+    const_idx = [i for i in range(X_raw.shape[1]) if np.nanmax(X_raw[:, i]) - np.nanmin(X_raw[:, i]) < 1e-12]
+    dropped_features = [features[i] for i in const_idx] if const_idx else []
+    if dropped_features:
+        print('Dropping constant proxy features:', dropped_features)
+
+    keep_idx = [i for i in range(X_raw.shape[1]) if i not in const_idx]
+    if not keep_idx:
+        raise RuntimeError('All proxy features are constant; cannot compute proxy')
+
+    # Keep only non-constant columns
+    features_kept = [features[i] for i in keep_idx]
+    X = X_raw[:, keep_idx]
+
+    # Fit a MinMaxScaler to the proxy features so we can save min/max for frontend
+    proxy_scaler = MinMaxScaler()
+    Xs = proxy_scaler.fit_transform(X)
 
     # Weighted sum; weights chosen to reflect relative influence (tweakable)
-    weights = np.ones(Xs.shape[1])
+    weights = np.ones(Xs.shape[1], dtype=float)
     # Put slightly higher weight on vulnerability and distance
-    for i, name in enumerate(features):
+    for i, name in enumerate(features_kept):
         if 'vuln' in name or 'inform' in name or 'inv_dist' in name:
             weights[i] = 1.5
         if 'inv_wealth' in name:
             weights[i] = 1.2
 
-    score = Xs.dot(weights)
-    # normalize score
-    score = (score - score.min()) / (score.max() - score.min() + 1e-9)
+    # compute continuous proxy as weighted sum of scaled features
+    raw_score = Xs.dot(weights)
 
-    # create 4-level risk bins
+    # normalize score to 0..1 range (robust to constant arrays)
+    if np.nanmax(raw_score) - np.nanmin(raw_score) < 1e-12:
+        score = np.zeros_like(raw_score)
+    else:
+        score = (raw_score - np.nanmin(raw_score)) / (np.nanmax(raw_score) - np.nanmin(raw_score))
+
     # compute quartile edges used for labeling (so we can reproduce mapping later)
     try:
         edges = list(np.quantile(score, [0.25, 0.5, 0.75]))
     except Exception:
         edges = [0.25, 0.5, 0.75]
 
-    bins = pd.qcut(score, q=4, labels=[0, 1, 2, 3])
+    # Use digitize for deterministic bin assignment (0..3). This avoids pd.qcut tie-related surprises.
+    bins = np.digitize(score, bins=[edges[0], edges[1], edges[2]])
+
     df2['proxy_risk_score'] = score
     df2['risk_level'] = bins.astype(int)
-    return df2, features, scaler, weights, edges
+
+    # Also attach scaled feature columns (for reproducibility / debug)
+    scaled_cols = []
+    for i, name in enumerate(features_kept):
+        col = f'scaled__{name}'
+        df2[col] = Xs[:, i]
+        scaled_cols.append(col)
+
+    # also return raw_score min/max so callers can reproduce the exact normalization
+    raw_min = float(np.nanmin(raw_score)) if raw_score.size > 0 else 0.0
+    raw_max = float(np.nanmax(raw_score)) if raw_score.size > 0 else 0.0
+    # Return dropped_features so callers can record which features were removed
+    return df2, features_kept, proxy_scaler, weights, edges, raw_min, raw_max, dropped_features
 
 
-def train_and_save(df, feature_names):
+def train_and_save(df, feature_names, proxy_scaler=None):
     X = df[feature_names].fillna(0).values.astype(float)
     # If any feature needs transformation (inv_wealth, inv_dist), they already included in features list
     y = df['risk_level'].values
@@ -341,17 +452,22 @@ def train_and_save(df, feature_names):
     print('Classification report on held-out set:')
     print(classification_report(y_test, y_pred))
 
-    # Save model and scaler
-    joblib.dump({'model': clf, 'scaler': scaler, 'features': feature_names}, os.path.join(OUTPUT_DIR, 'rf_risk_model.joblib'))
+    # Save model and scaler (include proxy scaler if present on df)
+    to_save = {'model': clf, 'scaler': scaler, 'features': feature_names}
+    if proxy_scaler is not None:
+        to_save['proxy_scaler'] = proxy_scaler
+    # If proxy scaled columns exist, the df should contain scaled__ columns and a proxy_scaler attribute
+    # but callers can add proxy_scaler into df metadata externally if desired
+    joblib.dump(to_save, os.path.join(OUTPUT_DIR, 'rf_risk_model.joblib'))
     print('Saved model to', os.path.join(OUTPUT_DIR, 'rf_risk_model.joblib'))
 
     # Predict for all rows
     probs = clf.predict_proba(Xs)
     preds = clf.predict(Xs)
     df_out = df[['adm4_pcode']].copy()
-    # include the continuous proxy score if present on the df
+    # include the continuous proxy score if present on the df (should be present when compute_proxy_risk used)
     if 'proxy_risk_score' in df.columns:
-        df_out['proxy_risk_score'] = df['proxy_risk_score']
+        df_out['proxy_risk_score'] = df['proxy_risk_score'].astype(float)
     else:
         # fallback: compute approx from model probabilities by taking weighted class index
         df_out['proxy_risk_score'] = 0.0
@@ -372,13 +488,13 @@ def main():
     print('Rows:', len(table))
 
     print('Computing proxy risk label...')
-    df_with_risk, feats, proxy_scaler, proxy_weights, proxy_edges = compute_proxy_risk(table)
+    df_with_risk, feats, proxy_scaler, proxy_weights, proxy_edges, proxy_raw_min, proxy_raw_max, dropped = compute_proxy_risk(table)
 
     # feature names used by classifier: use the features used to build proxy risk
     feature_names = feats
 
     print('Training Random Forest...')
-    clf = train_and_save(df_with_risk, feature_names)
+    clf = train_and_save(df_with_risk, feature_names, proxy_scaler)
 
     # Export proxy model metadata for frontend explainability
     meta = {
@@ -389,6 +505,20 @@ def main():
         'proxy_scaler_scale': (proxy_scaler.scale_.tolist() if hasattr(proxy_scaler, 'scale_') else None),
         'proxy_quartile_edges': [float(e) for e in proxy_edges]
     }
+    # include raw proxy score normalization bounds so frontend can compute the normalized proxy:
+    # normalized = (raw - proxy_raw_min) / (proxy_raw_max - proxy_raw_min)
+    try:
+        meta['proxy_raw_min'] = float(proxy_raw_min)
+        meta['proxy_raw_max'] = float(proxy_raw_max)
+    except Exception:
+        meta['proxy_raw_min'] = None
+        meta['proxy_raw_max'] = None
+    # record any dropped constant features so frontend can explain why some IMF
+    # indicators do not appear in the proxy computation
+    try:
+        meta['dropped_constant_features'] = dropped
+    except Exception:
+        meta['dropped_constant_features'] = []
     # include classifier details when available
     try:
         meta['rf_n_estimators'] = int(clf.n_estimators)
@@ -396,11 +526,57 @@ def main():
         meta['rf_n_estimators'] = None
     # include transformed feature values per adm4_pcode so frontend can exactly reproduce normalization
     try:
+        # store the proxy feature (pre-scaled) values
         feat_df = df_with_risk[['adm4_pcode'] + feats].copy()
         # coerce to numeric where possible
         for c in feats:
             feat_df[c] = pd.to_numeric(feat_df[c], errors='coerce')
         meta['proxy_feature_values'] = feat_df.fillna(0).to_dict(orient='records')
+
+        # also store the scaled feature values (the inputs used to compute the proxy score)
+        # If a feature is constant across the dataset (zero variance), MinMax scaler
+        # produces a degenerate column. To avoid misleading `0.0` values in the
+        # frontend we explicitly export `null` for constant features so the UI can
+        # show "constant across dataset" instead of a numeric zero.
+        scaled_cols = [c for c in df_with_risk.columns if c.startswith('scaled__')]
+        if scaled_cols:
+            scaled_df = df_with_risk[['adm4_pcode'] + scaled_cols].copy()
+            # map scaled column order to feature index so we can detect constant cols
+            out_scaled = []
+            # try to read scaler bounds if available
+            scaler_mins = None
+            scaler_maxs = None
+            try:
+                scaler_mins = proxy_scaler.data_min_.tolist()
+                scaler_maxs = proxy_scaler.data_max_.tolist()
+            except Exception:
+                scaler_mins = None
+                scaler_maxs = None
+
+            for _, r in scaled_df.iterrows():
+                row = {'adm4_pcode': r['adm4_pcode']}
+                for i, sc in enumerate(scaled_cols):
+                    fname = sc.replace('scaled__', '')
+                    val = r[sc]
+                    # if scaler min/max are present and equal for this feature,
+                    # export null to indicate constant feature
+                    is_const = False
+                    if scaler_mins is not None and scaler_maxs is not None and i < len(scaler_mins):
+                        try:
+                            is_const = float(scaler_mins[i]) == float(scaler_maxs[i])
+                        except Exception:
+                            is_const = False
+                    if is_const:
+                        row[fname] = None
+                    else:
+                        try:
+                            row[fname] = float(val)
+                        except Exception:
+                            row[fname] = None
+                out_scaled.append(row)
+            meta['proxy_scaled_feature_values'] = out_scaled
+        else:
+            meta['proxy_scaled_feature_values'] = []
     except Exception:
         meta['proxy_feature_values'] = []
     try:
@@ -427,6 +603,45 @@ def main():
             print('Failed copying predictions to public folder:', e)
     except Exception as e:
         print('Failed to write proxy metadata to public folder:', e)
+
+
+def load_model(path=None):
+    """Load saved RF model bundle and return dict with keys 'model','scaler','features' and optional 'proxy_scaler'."""
+    path = path or os.path.join(OUTPUT_DIR, 'rf_risk_model.joblib')
+    if not os.path.exists(path):
+        raise FileNotFoundError(path)
+    return joblib.load(path)
+
+
+def predict_from_model(df_in, model_bundle=None):
+    """Predict risk level and confidence for rows in df_in.
+
+    df_in: DataFrame that contains at least 'adm4_pcode' and the model features (the same feature names saved in bundle['features']).
+    model_bundle: optional preloaded bundle (dict) from load_model(). If None the default saved model will be loaded.
+    Returns: DataFrame with adm4_pcode, proxy_risk_score (if present), predicted_risk_level, predicted_risk_confidence.
+    """
+    if model_bundle is None:
+        model_bundle = load_model()
+    model = model_bundle.get('model')
+    scaler = model_bundle.get('scaler')
+    features = model_bundle.get('features')
+    if model is None or scaler is None or features is None:
+        raise RuntimeError('Model bundle missing required components')
+
+    missing = [f for f in features if f not in df_in.columns]
+    if missing:
+        raise RuntimeError(f'Missing features in input dataframe: {missing}')
+
+    X = df_in[features].fillna(0).values.astype(float)
+    Xs = scaler.transform(X)
+    preds = model.predict(Xs)
+    probs = model.predict_proba(Xs)
+    out = pd.DataFrame({'adm4_pcode': df_in['adm4_pcode'].values})
+    if 'proxy_risk_score' in df_in.columns:
+        out['proxy_risk_score'] = df_in['proxy_risk_score'].astype(float)
+    out['predicted_risk_level'] = preds
+    out['predicted_risk_confidence'] = probs.max(axis=1)
+    return out
 
 
 if __name__ == '__main__':

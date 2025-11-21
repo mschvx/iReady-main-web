@@ -141,11 +141,34 @@ export const Home = (): JSX.Element => {
       if (!map) return;
       try {
         // always use the external mapZoom when animating to a new center
-        map.setView([center.lat, center.lon], mapZoom, { animate: true });
+        // prefer flyTo so the clicked point becomes the visible center and
+        // the zoom animation is smooth and consistent across handlers
+        if (typeof map.flyTo === 'function') {
+          try {
+            map.flyTo([center.lat, center.lon], mapZoom, { animate: true, duration: 0.6 });
+          } catch (_e) {
+            map.setView([center.lat, center.lon], mapZoom, { animate: true });
+          }
+        } else {
+          map.setView([center.lat, center.lon], mapZoom, { animate: true });
+        }
       } catch {
         // ignore if map not ready
       }
     }, [center.lat, center.lon, mapZoom, map]);
+    return null;
+  }
+
+  // set the mapRef using react-leaflet's `useMap` hook to get the real Leaflet map instance
+  function MapRefSetter() {
+    const map = useMap();
+    useEffect(() => {
+      mapRef.current = map;
+      try {
+        console.debug('leaflet map created (MapRefSetter)', map && (map as any)?._leaflet_id);
+      } catch {}
+      return () => { mapRef.current = null; };
+    }, [map]);
     return null;
   }
 
@@ -183,6 +206,29 @@ export const Home = (): JSX.Element => {
   const defaultCenterLon = (METRO_MANILA_BOUNDS.minLon + METRO_MANILA_BOUNDS.maxLon) / 2;
   const [mapCenter, setMapCenter] = useState({ lat: defaultCenterLat, lon: defaultCenterLon });
   const [mapZoom, setMapZoom] = useState<number>(13); // <- new: zoom state
+  // reference to the Leaflet map instance so handlers can directly fly/zoom
+  const mapRef = useRef<any>(null);
+
+  // Helper to fly to a lat/lon with a vertical pixel offset so popped labels/popups
+  // appear nicely above the marker (helps match the provided screenshot).
+  const flyToWithOffset = (lat: number, lon: number, zoomLevel: number = 19, offsetPx: [number, number] = [0, -120]) => {
+    const map = mapRef.current;
+    if (!map) return;
+    try {
+      const pt = map.latLngToContainerPoint([lat, lon]);
+      const shifted = { x: pt.x + offsetPx[0], y: pt.y + offsetPx[1] };
+      const dest = map.containerPointToLatLng(shifted);
+      if (typeof map.flyTo === 'function') {
+        map.flyTo(dest, zoomLevel, { animate: true, duration: 0.6 });
+      } else if (typeof map.setView === 'function') {
+        map.setView(dest, zoomLevel, { animate: true });
+      }
+    } catch (err) {
+      try {
+        if (typeof map.flyTo === 'function') map.flyTo([lat, lon], zoomLevel, { animate: true, duration: 0.6 });
+      } catch {}
+    }
+  };
   // brgy points loaded from CSV (adm4_pcode -> centroid)
   const [brgyPoints, setBrgyPoints] = useState<{ id: string; lat: number; lon: number }[]>([]);
   // typhoon track state (will be replaced by GeoJSON if available)
@@ -217,7 +263,7 @@ export const Home = (): JSX.Element => {
   const [riskModelMeta, setRiskModelMeta] = useState<any | null>(null);
   
   // Legend / layer toggles
-  const [showAreaCircles, setShowAreaCircles] = useState<boolean>(true);
+  const [showAreaCircles, setShowAreaCircles] = useState<boolean>(false);
   const [showPoiLabels, setShowPoiLabels] = useState<boolean>(false);
   // Once user focuses a barangay, hide the button and show their username
   const [focusedByUser, setFocusedByUser] = useState<boolean>(false);
@@ -253,6 +299,7 @@ export const Home = (): JSX.Element => {
     features: Array<{ name: string; raw: number; norm: number; weight: number; contrib: number }>;
     proxy: number;
     label: string;
+    raw?: number;
   }>(null);
 
   // Friendly labels for features to show plain-language names in the UI
@@ -266,6 +313,7 @@ export const Home = (): JSX.Element => {
     vuln_health: 'Health vulnerability',
     vuln_water: 'Water vulnerability',
     storms_2024: 'Recent storm frequency',
+    inv_dist: 'Distance to typhoon track (closer is worse)',
     wealth_mean: 'Wealth (mean)',
     wealth_std: 'Wealth (std dev)',
     pop_30min: 'Population (within 30min)',
@@ -281,27 +329,28 @@ export const Home = (): JSX.Element => {
     return `${list.slice(0, -1).join(', ')}, and ${list[list.length - 1]}`;
   }
 
-  useEffect(() => {
-    if (!selectedBarangay) {
+  // Compute explainability (proxy score + contributions) for a given barangay code.
+  const computeExplain = (code: string | null) => {
+    if (!code) {
       setExplain(null);
       return;
     }
+
     // If we have exact model metadata, use it to compute exact normalized values and contributions.
     if (riskModelMeta && Array.isArray(riskModelMeta.features) && Array.isArray(riskModelMeta.proxy_weights)) {
       const feats = riskModelMeta.features as string[];
       const weights = riskModelMeta.proxy_weights as number[];
 
-      // find transformed feature values for this barangay if available
-      const pv = Array.isArray(riskModelMeta.proxy_feature_values) ? riskModelMeta.proxy_feature_values.find((r: any) => String(r.adm4_pcode) === String(selectedBarangay)) : null;
+      const pv = Array.isArray(riskModelMeta.proxy_feature_values)
+        ? riskModelMeta.proxy_feature_values.find((r: any) => String(r.adm4_pcode) === String(code))
+        : null;
 
-      // fallback: try toReceiveData/raw row if proxy_feature_values not present for this adm4
-      const rawRow = pv || ((Array.isArray(toReceiveData) && toReceiveData.find(r => String(r.adm4_pcode) === String(selectedBarangay))) || riskMap[selectedBarangay]);
+      const rawRow = pv || ((Array.isArray(toReceiveData) && toReceiveData.find(r => String(r.adm4_pcode) === String(code))) || riskMap[code]);
       if (!rawRow) {
         setExplain(null);
         return;
       }
 
-      // scaler mins/max for transformed features (these align with feats order)
       const mins = (riskModelMeta.proxy_scaler_data_min || []).slice();
       const maxs = (riskModelMeta.proxy_scaler_data_max || []).slice();
 
@@ -309,21 +358,15 @@ export const Home = (): JSX.Element => {
       let proxy = 0;
       for (let i = 0; i < feats.length; i++) {
         const f = feats[i];
-        // raw transformed value may be present in pv (proxy_feature_values) under same key
         let rawVal = Number(rawRow[f] ?? rawRow[f.replace(/^inv_/, '')] ?? 0);
-        // If the meta provided transformed values, we use them directly. Otherwise attempt simple transforms
         if (!pv) {
-          // attempt to reconstruct common transforms
           if (f === 'inv_wealth' && rawRow['wealth_mean'] !== undefined) {
             rawVal = 1 - Number(rawRow['wealth_mean'] ?? 0);
           } else if (f === 'low_health_access' && rawRow['brgy_healthcenter_pop_reached_30min'] !== undefined) {
             const val = Number(rawRow['brgy_healthcenter_pop_reached_30min'] ?? 0);
-            // approximate max used during training by using max in toReceiveData if available
             const maxVal = Array.isArray(toReceiveData) && toReceiveData.length ? Math.max(...toReceiveData.map(d => Number(d['brgy_healthcenter_pop_reached_30min'] ?? 0))) : (val || 1);
             rawVal = 1 - (val / (maxVal + 1));
           }
-
-          // other transformations may be dataset-specific; if we can't compute, use 0
         }
 
         const mn = (mins && mins[i] != null) ? Number(mins[i]) : 0;
@@ -335,26 +378,32 @@ export const Home = (): JSX.Element => {
         featuresOut.push({ name: f, raw: rawVal, norm: Math.max(0, Math.min(1, norm)), weight, contrib });
       }
 
-      // map proxy 0..1 to label using stored quartile edges
+      // The backend stores the raw weighted sum (proxy) and also provides
+      // `proxy_raw_min` / `proxy_raw_max` which were used to normalize that
+      // raw sum into the 0-1 range exposed as the public "proxy score".
+      // To match the model exactly we must apply the same normalization here.
+      const rawProxy = proxy;
+      const rawMin = Number(riskModelMeta.proxy_raw_min ?? 0);
+      const rawMax = Number(riskModelMeta.proxy_raw_max ?? (rawMin + 1));
+      const normProxy = (rawProxy - rawMin) / Math.max(1e-9, (rawMax - rawMin));
+      const proxyClamped = Math.max(0, Math.min(1, normProxy));
+
       const edges = Array.isArray(riskModelMeta.proxy_quartile_edges) ? riskModelMeta.proxy_quartile_edges : [0.25, 0.5, 0.75];
-      const label = proxy < edges[0] ? 'Low' : proxy < edges[1] ? 'Medium' : proxy < edges[2] ? 'High' : 'Very High';
-      setExplain({ features: featuresOut, proxy, label });
+      const label = proxyClamped < edges[0] ? 'Low' : proxyClamped < edges[1] ? 'Medium' : proxyClamped < edges[2] ? 'High' : 'Very High';
+      setExplain({ features: featuresOut, proxy: proxyClamped, label, raw: rawProxy });
       return;
     }
 
-    // fallback legacy behavior (no exact meta available)
-    // features used in training/proxy computation
+    // Fallback legacy behavior (no exact meta available)
     const feats = ['wealth_mean','wealth_std','pop_30min','access_pct_30min','climate_rainfall','disease_risk'];
     const weights = [0.25,0.05,0.25,0.2,0.125,0.125];
 
-    // prefer toReceiveData rows (they include feature columns), else try riskMap entries
-    const row = (Array.isArray(toReceiveData) && toReceiveData.find(r => String(r.adm4_pcode) === String(selectedBarangay))) || riskMap[selectedBarangay];
+    const row = (Array.isArray(toReceiveData) && toReceiveData.find(r => String(r.adm4_pcode) === String(code))) || riskMap[code];
     if (!row) {
       setExplain(null);
       return;
     }
 
-    // compute min/max across dataset for normalization if possible
     const dataset = Array.isArray(toReceiveData) && toReceiveData.length > 0 ? toReceiveData : null;
     const mins: Record<string, number> = {};
     const maxs: Record<string, number> = {};
@@ -370,15 +419,14 @@ export const Home = (): JSX.Element => {
     let proxy = 0;
     for (let i=0;i<feats.length;i++){
       const f = feats[i];
-      const raw = Number(row[f] ?? 0);
+      const raw = Number((row as any)[f] ?? 0);
       let norm = 0;
       if (dataset) {
         const mn = mins[f];
         const mx = maxs[f];
         norm = (raw - mn) / (Math.max(1e-9, mx - mn));
       } else {
-        // fallback normalization heuristics
-        if (f.includes('wealth')) norm = 1 - Math.min(Math.max(raw,0),1); // wealth: lower wealth => higher risk
+        if (f.includes('wealth')) norm = 1 - Math.min(Math.max(raw,0),1);
         else if (f.includes('pop')) norm = Math.min(raw / 50000, 1);
         else if (f.includes('access')) norm = 1 - Math.min(Math.max(raw,0),100)/100;
         else norm = Math.min(Math.max(raw,0)/100,1);
@@ -389,9 +437,13 @@ export const Home = (): JSX.Element => {
       featuresOut.push({ name: f, raw, norm, weight, contrib });
     }
 
-    // map proxy 0..1 to label (quantiles used in training, approximate here)
     const label = proxy < 0.25 ? 'Low' : proxy < 0.5 ? 'Medium' : proxy < 0.75 ? 'High' : 'Very High';
     setExplain({ features: featuresOut, proxy, label });
+  };
+
+  // Recompute explain whenever the selected barangay or relevant data changes
+  useEffect(() => {
+    computeExplain(selectedBarangay);
   }, [selectedBarangay, toReceiveData, riskMap, riskModelMeta]);
 
   // Load typhoon GeoJSON and barangay CSV from frontend `public/data/`.
@@ -674,6 +726,7 @@ export const Home = (): JSX.Element => {
     if (matched) {
       setMapCenter({ lat: matched.lat, lon: matched.lon });
       setMapZoom(18);
+      flyToWithOffset(matched.lat, matched.lon, 18, [0, -120]);
       
       // Load prediction data if available
       if (toReceiveData) {
@@ -686,7 +739,8 @@ export const Home = (): JSX.Element => {
     } else if (areaCodes && areaCodes.some((c) => c.toLowerCase() === lc)) {
       const { lat, lon } = getLatLonForCode(selectedBarangay);
       setMapCenter({ lat, lon });
-      setMapZoom(17);
+      setMapZoom(18);
+      flyToWithOffset(lat, lon, 18, [0, -120]);
       
       if (toReceiveData) {
         const pred = toReceiveData.find((p) => (p.adm4_pcode || "").toLowerCase() === lc);
@@ -855,8 +909,10 @@ export const Home = (): JSX.Element => {
       const matched = displayCenters.find((d) => (d.adm4_pcode || "").toLowerCase() === lc);
       if (matched) {
         setMapCenter({ lat: matched.lat, lon: matched.lon });
-        setMapZoom(18); // zoom in more when focusing a single barangay
+        setMapZoom(19); // zoom in more when focusing a single barangay
         setSelectedBarangay(matched.adm4_pcode);
+        computeExplain(matched.adm4_pcode);
+        flyToWithOffset(matched.lat, matched.lon, 19, [0, -120]);
  
   // show the formatted prediction summary (if loaded)
         if (toReceiveData) {
@@ -877,8 +933,10 @@ export const Home = (): JSX.Element => {
       if (areaCodes && areaCodes.some((c) => c.toLowerCase() === lc)) {
         const { lat, lon } = getLatLonForCode(q);
         setMapCenter({ lat, lon });
-        setMapZoom(17);
+        setMapZoom(19);
         setSelectedBarangay(q);
+        computeExplain(q);
+        flyToWithOffset(lat, lon, 19, [0, -120]);
  
         if (toReceiveData) {
           const pred = toReceiveData.find((p) => (p.adm4_pcode || "").toLowerCase() === lc);
@@ -966,6 +1024,7 @@ export const Home = (): JSX.Element => {
   const handleSelectSuggestion = (s: { id: string; name: string; lat: number; lon: number }) => {
     setMapCenter({ lat: s.lat, lon: s.lon });
     setMapZoom(15);
+    flyToWithOffset(s.lat, s.lon, 15, [0, -100]);
     setSearchQuery(s.name);
     setShowSuggestions(false);
   };
@@ -975,7 +1034,8 @@ export const Home = (): JSX.Element => {
     if (!adm) return;
     // set selected barangay and supplies
     setSelectedBarangay(adm.adm4_pcode || "");
-    setMapZoom(17);
+    computeExplain(adm.adm4_pcode || "");
+    setMapZoom(19);
     try {
       categorizeSupplies(adm);
     } catch (err) {
@@ -993,9 +1053,10 @@ export const Home = (): JSX.Element => {
       const resp = await fetch(`/api/geocode?q=${encodeURIComponent(adm.adm4_pcode)}`);
       if (resp.ok) {
         const data = await resp.json();
-        if (data.lat && data.lon) {
+          if (data.lat && data.lon) {
           setMapCenter({ lat: data.lat, lon: data.lon });
-          setMapZoom(18);
+          setMapZoom(19);
+          flyToWithOffset(data.lat, data.lon, 19, [0, -120]);
         }
       }
     } catch (err) {
@@ -1109,6 +1170,7 @@ export const Home = (): JSX.Element => {
              style={{ height: '100%', width: '100%', minHeight: '400px' }}
            >
             <MapViewUpdater center={mapCenter} />
+            <MapRefSetter />
             <FitNavotasBounds />
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -1155,6 +1217,21 @@ export const Home = (): JSX.Element => {
                   center={[b.lat, b.lon]}
                   radius={5}
                   pathOptions={{ color: '#fff', fillColor, fillOpacity: 0.95, weight: 1 }}
+                  eventHandlers={{
+                    click: (e: any) => {
+                      const code = b.adm4_pcode || String(idx);
+                      setSelectedBarangay(code);
+                      computeExplain(code);
+                      // Keep React state in sync so MapViewUpdater won't later override
+                      // the map view with stale values.
+                      setMapCenter({ lat: b.lat, lon: b.lon });
+                      setMapZoom(19);
+
+                      // Try to use the actual Leaflet map instance to flyTo the point —
+                      // this guarantees the clicked point becomes the center and the map zooms in smoothly.
+                      flyToWithOffset(b.lat, b.lon, 19, [0, -120]);
+                    }
+                  }}
                 >
                   <LeafletPopup>{b.adm4_pcode}</LeafletPopup>
                   <LeafletTooltip direction="top" offset={[0, -6]} permanent className="bg-white text-xs text-black px-1 py-0 rounded shadow-sm">
@@ -1261,6 +1338,26 @@ export const Home = (): JSX.Element => {
                     onClick={() => {
                       setSearchQuery(s);
                       setAreaSuggestions([]);
+                      // Immediately select and focus this barangay
+                      setSelectedBarangay(s);
+                      computeExplain(s);
+                      const matched = displayCenters.find((d) => (d.adm4_pcode || '').toLowerCase() === (s || '').toLowerCase());
+                      if (matched) {
+                        setMapCenter({ lat: matched.lat, lon: matched.lon });
+                        setMapZoom(18);
+                        const lm = mapRef.current;
+                        if (lm && typeof lm.flyTo === 'function') {
+                          try { lm.flyTo([matched.lat, matched.lon], 18, { animate: true, duration: 0.6 }); } catch {}
+                        }
+                      } else {
+                        const { lat, lon } = getLatLonForCode(s);
+                        setMapCenter({ lat, lon });
+                        setMapZoom(18);
+                        const lm = mapRef.current;
+                        if (lm && typeof lm.flyTo === 'function') {
+                          try { lm.flyTo([lat, lon], 18, { animate: true, duration: 0.6 }); } catch {}
+                        }
+                      }
                     }}
                     className="w-full text-left px-4 py-2 hover:bg-gray-100"
                   >
@@ -1344,16 +1441,21 @@ export const Home = (): JSX.Element => {
                         [selectedBarangay]: user?.username || "",
                       }));
 
+                      // compute explain so ranking & table appear immediately after claiming
+                      computeExplain(selectedBarangay);
+
                       // Navigate to center
                       const lc = selectedBarangay.toLowerCase();
                       const matched = displayCenters.find((d) => (d.adm4_pcode || "").toLowerCase() === lc);
                       if (matched) {
                         setMapCenter({ lat: matched.lat, lon: matched.lon });
                         setMapZoom(18);
+                        flyToWithOffset(matched.lat, matched.lon, 18, [0, -120]);
                       } else {
                         const { lat, lon } = getLatLonForCode(selectedBarangay);
                         setMapCenter({ lat, lon });
                         setMapZoom(18);
+                        flyToWithOffset(lat, lon, 18, [0, -120]);
                       }
 
                       // Save to history in localStorage
@@ -1440,11 +1542,14 @@ export const Home = (): JSX.Element => {
                             onClick={() => {
                               setSearchQuery(t.adm4_pcode);
                               setSelectedBarangay(t.adm4_pcode);
+                              // compute explain immediately so the table appears without waiting
+                              computeExplain(t.adm4_pcode);
                               // attempt to focus map
                               const matched = displayCenters.find((d) => (d.adm4_pcode || '').toLowerCase() === (t.adm4_pcode || '').toLowerCase());
                               if (matched) {
                                 setMapCenter({ lat: matched.lat, lon: matched.lon });
                                 setMapZoom(18);
+                                flyToWithOffset(matched.lat, matched.lon, 18, [0, -120]);
                               }
                             }}
                             className="w-full text-left p-2 bg-white rounded border hover:bg-gray-50 flex items-center justify-between"
@@ -1547,7 +1652,16 @@ export const Home = (): JSX.Element => {
                   <div className="font-semibold">How Ranking Was Computed</div>
                   <div className="text-xs text-gray-500">Proxy model</div>
                 </div>
-                <div className="text-sm text-gray-700 mb-2">Proxy score: <span className="font-medium">{explain.proxy.toFixed(3)}</span> — Label: <span className="font-semibold">{explain.label}</span></div>
+                <div className="text-sm text-gray-700 mb-2">
+                  <div className="font-medium">Proxy score (normalized): <span className="ml-1">{Math.round((explain.proxy || 0) * 100)}% <span className="text-xs text-gray-500">({(explain.proxy || 0).toFixed(3)})</span></span></div>
+                  <div className="text-sm mt-1">Label: <span className="font-semibold">{explain.label}</span></div>
+                </div>
+                {/* Show note if model metadata lists dropped constant features */}
+                {riskModelMeta && Array.isArray(riskModelMeta.dropped_constant_features) && riskModelMeta.dropped_constant_features.length > 0 && (
+                  <div className="mb-2 text-xs text-gray-600">
+                    <div className="font-medium">Note:</div>
+                  </div>
+                )}
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
@@ -1585,6 +1699,16 @@ export const Home = (): JSX.Element => {
                   </ul>
                   <div className="text-xs text-gray-500 mt-2">How the score is computed: we add up all the "Effect on score" numbers to get the proxy score (a number between 0 and 1), then map that to a label: Low / Medium / High / Very High.</div>
                 </div>
+                {explain.raw != null && (
+                  <div className="text-xs text-gray-500 mt-2">
+                    Raw weighted sum (pre-normalization): <span className="font-mono">{Number(explain.raw).toFixed(3)}</span>
+                    {riskModelMeta && (riskModelMeta.proxy_raw_min != null) && (riskModelMeta.proxy_raw_max != null) && (
+                      <div className="mt-1">Normalization: <span className="font-mono">(raw - {Number(riskModelMeta.proxy_raw_min).toFixed(3)}) / ({Number(riskModelMeta.proxy_raw_max).toFixed(3)} - {Number(riskModelMeta.proxy_raw_min).toFixed(3)})</span> =&nbsp;
+                        <span className="font-mono">{(((Number(explain.raw) - Number(riskModelMeta.proxy_raw_min)) / Math.max(1e-9, (Number(riskModelMeta.proxy_raw_max) - Number(riskModelMeta.proxy_raw_min))))).toFixed(6)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {/* Plain-language summary: show top contributors in simple English */}
                 {explain && explain.features && explain.features.length > 0 && (
                   (() => {

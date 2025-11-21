@@ -261,6 +261,20 @@ export const PhilippinesMap: React.FC<PhilippinesMapProps> = ({ className = '' }
           center={[b.lat, b.lon]}
           radius={3}
           pathOptions={{ color: '#f97316', fillColor: '#fb923c', weight: 1, fillOpacity: 0.9 }}
+          eventHandlers={{
+            click: (e: any) => {
+              try {
+                const map = e?.target?._map || null;
+                if (map && typeof map.flyTo === 'function') {
+                  map.flyTo([b.lat, b.lon], 19, { animate: true, duration: 0.5 });
+                } else if (map && typeof map.setView === 'function') {
+                  map.setView([b.lat, b.lon], 19, { animate: true });
+                }
+              } catch (err) {
+                // nothing to do — best-effort flyTo
+              }
+            }
+          }}
         >
           <Popup>{b.id}</Popup>
         </CircleMarker>

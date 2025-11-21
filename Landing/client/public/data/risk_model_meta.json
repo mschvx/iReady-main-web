@@ -2,6 +2,36 @@
   "features": [
     "inv_wealth",
     "low_health_access",
+    "inv_dist"
+  ],
+  "proxy_weights": [
+    1.2,
+    1.0,
+    1.5
+  ],
+  "proxy_scaler_data_min": [
+    0.24772850385714285,
+    1.0262648894365789e-05,
+    0.005581607279829685
+  ],
+  "proxy_scaler_data_max": [
+    0.3725372297142856,
+    1.0,
+    0.006248864429753261
+  ],
+  "proxy_scaler_scale": [
+    8.012260305778696,
+    1.0000102627542173,
+    1498.6725883934464
+  ],
+  "proxy_quartile_edges": [
+    0.6495703134404737,
+    0.7213464229254812,
+    0.8201801543048945
+  ],
+  "proxy_raw_min": 0.5544364931038683,
+  "proxy_raw_max": 3.1446656326197573,
+  "dropped_constant_features": [
     "inform_vulnerability",
     "lack_of_coping",
     "inform_risk_index",
@@ -10,668 +40,621 @@
     "vuln_water",
     "storms_2024"
   ],
-  "proxy_weights": [
-    1.2,
-    1.0,
-    1.5,
-    1.0,
-    1.5,
-    1.5,
-    1.5,
-    1.5,
-    1.0
-  ],
-  "proxy_scaler_data_min": [
-    0.24772850385714285,
-    1.0262648894365789e-05,
-    4.4,
-    4.1,
-    5.2,
-    0.507960798,
-    0.392178956,
-    0.486087244,
-    11.0
-  ],
-  "proxy_scaler_data_max": [
-    0.3725372297142856,
-    1.0,
-    4.4,
-    4.1,
-    5.2,
-    0.507960798,
-    0.392178956,
-    0.486087244,
-    11.0
-  ],
-  "proxy_scaler_scale": [
-    8.012260305778696,
-    1.0000102627542173,
-    1.0,
-    1.0,
-    1.0,
-    1.0,
-    1.0,
-    1.0,
-    1.0
-  ],
-  "proxy_quartile_edges": [
-    0.420802346431458,
-    0.5063083168848788,
-    0.652810492513567
-  ],
   "rf_n_estimators": 200,
   "proxy_feature_values": [
     {
       "adm4_pcode": "Administrative code (Barangay level, ADM4) for Navotas",
       "inv_wealth": 0.2932806135342855,
       "low_health_access": 1.0,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.0060719847994884476
     },
     {
       "adm4_pcode": "PH137401001",
       "inv_wealth": 0.266762873,
       "low_health_access": 0.31235767630230193,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006215694762341988
     },
     {
       "adm4_pcode": "PH137401002",
       "inv_wealth": 0.28616454342857145,
       "low_health_access": 0.9272950849198277,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006196960342278503
     },
     {
       "adm4_pcode": "PH137401003",
       "inv_wealth": 0.2812117205714285,
       "low_health_access": 0.8728674343880634,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006152675206690281
     },
     {
       "adm4_pcode": "PH137401004",
       "inv_wealth": 0.2727016585714287,
       "low_health_access": 0.8767925897106887,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006153805416844382
     },
     {
       "adm4_pcode": "PH137401005",
       "inv_wealth": 0.28265186757142857,
       "low_health_access": 0.9074844780001134,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006183074933288768
     },
     {
       "adm4_pcode": "PH137401006",
       "inv_wealth": 0.27266817685714284,
       "low_health_access": 0.9647632976477085,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006164291148968992
     },
     {
       "adm4_pcode": "PH137401007",
       "inv_wealth": 0.2604909965714286,
       "low_health_access": 0.9881208812782909,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006178106644064959
     },
     {
       "adm4_pcode": "PH137401008",
       "inv_wealth": 0.29305183599999995,
       "low_health_access": 0.9803328649118289,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006188765437172557
     },
     {
       "adm4_pcode": "PH137401009",
       "inv_wealth": 0.28616454342857145,
       "low_health_access": 0.9367611470070062,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006191616052661538
     },
     {
       "adm4_pcode": "PH137401010",
       "inv_wealth": 0.2721292322857144,
       "low_health_access": 0.880730573344432,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.0061842521777813846
     },
     {
       "adm4_pcode": "PH137401011",
       "inv_wealth": 0.28273932685714287,
       "low_health_access": 0.882926472328358,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.00619815429673544
     },
     {
       "adm4_pcode": "PH137401012",
       "inv_wealth": 0.28616454342857145,
       "low_health_access": 0.9842866530248696,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006182309274319301
     },
     {
       "adm4_pcode": "PH137401013",
       "inv_wealth": 0.28022515571428575,
       "low_health_access": 0.7053096790223143,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006205491988882676
     },
     {
       "adm4_pcode": "PH137401014",
       "inv_wealth": 0.28316528885714287,
       "low_health_access": 0.7395568567682118,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.0061368571633138224
     },
     {
       "adm4_pcode": "PH137401015",
       "inv_wealth": 0.2600112897142858,
       "low_health_access": 0.8914687933885552,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.0061501447045510865
     },
     {
       "adm4_pcode": "PH137401016",
       "inv_wealth": 0.27811576357142864,
       "low_health_access": 0.9061903579745348,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006182448577360664
     },
     {
       "adm4_pcode": "PH137401017",
       "inv_wealth": 0.27036393042857143,
       "low_health_access": 0.5196818619893344,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.00619857639728972
     },
     {
       "adm4_pcode": "PH137401018",
       "inv_wealth": 0.24772850385714285,
       "low_health_access": 0.8946082403118285,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006134200774969024
     },
     {
       "adm4_pcode": "PH137401019",
       "inv_wealth": 0.26390273628571426,
       "low_health_access": 0.8662085146529588,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.0061599501352176496
     },
     {
       "adm4_pcode": "PH137401020",
       "inv_wealth": 0.2612777580000001,
       "low_health_access": 0.8871083991263202,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.00615191915295038
     },
     {
       "adm4_pcode": "PH137401021",
       "inv_wealth": 0.2566046242857143,
       "low_health_access": 0.8584889501546222,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006171105099384585
     },
     {
       "adm4_pcode": "PH137401022",
       "inv_wealth": 0.2750483570000001,
       "low_health_access": 0.5854393742739817,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006157082885673945
     },
     {
       "adm4_pcode": "PH137401023",
       "inv_wealth": 0.25582551142857146,
       "low_health_access": 0.930005039986872,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006211068447857906
     },
     {
       "adm4_pcode": "PH137401024",
       "inv_wealth": 0.2578247320000001,
       "low_health_access": 0.8698606835149942,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006162008370857118
     },
     {
       "adm4_pcode": "PH137401025",
       "inv_wealth": 0.27493219514285716,
       "low_health_access": 0.963705423799678,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006156214010010776
     },
     {
       "adm4_pcode": "PH137401026",
       "inv_wealth": 0.2742464868571428,
       "low_health_access": 0.9154502434454257,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.0061346403598087134
     },
     {
       "adm4_pcode": "PH137401027",
       "inv_wealth": 0.27621598828571425,
       "low_health_access": 0.839882665082661,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006248864429753261
     },
     {
       "adm4_pcode": "PH137503001",
       "inv_wealth": 0.2847268844285714,
       "low_health_access": 0.921020090879861,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.00612232985972917
     },
     {
       "adm4_pcode": "PH137503002",
       "inv_wealth": 0.32962239514285707,
       "low_health_access": 0.9533403536693537,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006118685962604809
     },
     {
       "adm4_pcode": "PH137503003",
       "inv_wealth": 0.3449341191428571,
       "low_health_access": 0.9705376796746084,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006122790530052273
     },
     {
       "adm4_pcode": "PH137503004",
       "inv_wealth": 0.3267523181428571,
       "low_health_access": 0.8904976389236821,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006120562702116217
     },
     {
       "adm4_pcode": "PH137503005",
       "inv_wealth": 0.332088634,
       "low_health_access": 0.8771440854353205,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006128389396104605
     },
     {
       "adm4_pcode": "PH137503006",
       "inv_wealth": 0.2989989472857142,
       "low_health_access": 0.9780888341045885,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006128253337001714
     },
     {
       "adm4_pcode": "PH137503007",
       "inv_wealth": 0.3474932897142857,
       "low_health_access": 0.9816929737697984,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006117086981750724
     },
     {
       "adm4_pcode": "PH137503008",
       "inv_wealth": 0.35392806985714287,
       "low_health_access": 0.8823738286853967,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006103064307615267
     },
     {
       "adm4_pcode": "PH137503009",
       "inv_wealth": 0.32912977985714276,
       "low_health_access": 0.2591073568516985,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006099029660877403
     },
     {
       "adm4_pcode": "PH137503010",
       "inv_wealth": 0.30519316857142853,
       "low_health_access": 0.6399412237572522,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.0061222309408058475
     },
     {
       "adm4_pcode": "PH137503011",
       "inv_wealth": 0.3053382872857143,
       "low_health_access": 0.5817500546229487,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006131231234456432
     },
     {
       "adm4_pcode": "PH137503012",
       "inv_wealth": 0.34416529528571427,
       "low_health_access": 0.8339348442894465,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.0061302738310030575
     },
     {
       "adm4_pcode": "PH137503013",
       "inv_wealth": 0.34142581214285717,
       "low_health_access": 0.645308281249535,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.006124986189007621
     },
     {
       "adm4_pcode": "PH137503014",
       "inv_wealth": 0.3725372297142856,
       "low_health_access": 0.6627666890426621,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.0061368571633138224
     },
     {
       "adm4_pcode": "PH137603001",
       "inv_wealth": 0.29798618685714284,
       "low_health_access": 0.4025523002547292,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.005734630090237164
     },
     {
       "adm4_pcode": "PH137603002",
       "inv_wealth": 0.2928172737142857,
       "low_health_access": 0.7168737344229666,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.005716938619247343
     },
     {
       "adm4_pcode": "PH137603003",
       "inv_wealth": 0.33575779614285717,
       "low_health_access": 0.9360492270532046,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.00581524771342821
     },
     {
       "adm4_pcode": "PH137603004",
       "inv_wealth": 0.27613813642857143,
       "low_health_access": 0.37465441812679356,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.005760898219051018
     },
     {
       "adm4_pcode": "PH137603005",
       "inv_wealth": 0.315864005,
       "low_health_access": 1.0262648894365789e-05,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.005615877869116548
     },
     {
       "adm4_pcode": "PH137603006",
       "inv_wealth": 0.2737230445714286,
       "low_health_access": 0.08974737771361119,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.005677144457940527
     },
     {
       "adm4_pcode": "PH137603007",
       "inv_wealth": 0.30110781285714283,
       "low_health_access": 0.5254683539419296,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.0058490793225647675
     },
     {
       "adm4_pcode": "PH137603008",
       "inv_wealth": 0.315322471,
       "low_health_access": 0.41893200102257033,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.005581607279829685
     },
     {
       "adm4_pcode": "PH137603009",
       "inv_wealth": 0.28059007957142856,
       "low_health_access": 0.6652574339293229,
-      "inform_vulnerability": 4.4,
-      "lack_of_coping": 4.1,
-      "inform_risk_index": 5.2,
-      "vuln_food": 0.507960798,
-      "vuln_health": 0.392178956,
-      "vuln_water": 0.486087244,
-      "storms_2024": 11.0
+      "inv_dist": 0.00566355271400489
+    }
+  ],
+  "proxy_scaled_feature_values": [
+    {
+      "adm4_pcode": "Administrative code (Barangay level, ADM4) for Navotas",
+      "inv_wealth": 0.36497536021064736,
+      "low_health_access": 0.9999999999999999,
+      "inv_dist": 0.7349153466769565
+    },
+    {
+      "adm4_pcode": "PH137401001",
+      "inv_wealth": 0.1525083203288533,
+      "low_health_access": 0.31235061919814433,
+      "inv_dist": 0.950289528684598
+    },
+    {
+      "adm4_pcode": "PH137401002",
+      "inv_wealth": 0.3079595541694964,
+      "low_health_access": 0.9272943387671537,
+      "inv_dist": 0.9222127668760045
+    },
+    {
+      "adm4_pcode": "PH137401003",
+      "inv_wealth": 0.26827624818965656,
+      "low_health_access": 0.8728661296577893,
+      "inv_dist": 0.855843848096649
+    },
+    {
+      "adm4_pcode": "PH137401004",
+      "inv_wealth": 0.2000914162273424,
+      "low_health_access": 0.876791325263319,
+      "inv_dist": 0.8575376630737246
+    },
+    {
+      "adm4_pcode": "PH137401005",
+      "inv_wealth": 0.2798150808322437,
+      "low_health_access": 0.9074835285360497,
+      "inv_dist": 0.901403085044457
+    },
+    {
+      "adm4_pcode": "PH137401006",
+      "inv_wealth": 0.19982315201700063,
+      "low_health_access": 0.9647629360220927,
+      "inv_dist": 0.8732523423781142
+    },
+    {
+      "adm4_pcode": "PH137401007",
+      "inv_wealth": 0.10225641377746131,
+      "low_health_access": 0.988120759365815,
+      "inv_dist": 0.8939572461735246
+    },
+    {
+      "adm4_pcode": "PH137401008",
+      "inv_wealth": 0.36314233505383786,
+      "low_health_access": 0.9803326630728553,
+      "inv_dist": 0.909931287229238
+    },
+    {
+      "adm4_pcode": "PH137401009",
+      "inv_wealth": 0.3079595541694964,
+      "low_health_access": 0.9367604980022008,
+      "inv_dist": 0.914203426522624
+    },
+    {
+      "adm4_pcode": "PH137401010",
+      "inv_wealth": 0.19550498782032966,
+      "low_health_access": 0.8807293493116205,
+      "inv_dist": 0.903167389095378
+    },
+    {
+      "adm4_pcode": "PH137401011",
+      "inv_wealth": 0.2805158273955439,
+      "low_health_access": 0.8829252708315181,
+      "inv_dist": 0.9240021136924064
+    },
+    {
+      "adm4_pcode": "PH137401012",
+      "inv_wealth": 0.3079595541694964,
+      "low_health_access": 0.9842864917626516,
+      "inv_dist": 0.9002556129348598
+    },
+    {
+      "adm4_pcode": "PH137401013",
+      "inv_wealth": 0.2603716337456956,
+      "low_health_access": 0.7053066546879798,
+      "inv_dist": 0.9349989117755388
+    },
+    {
+      "adm4_pcode": "PH137401014",
+      "inv_wealth": 0.28392874581991423,
+      "low_health_access": 0.7395541839042451,
+      "inv_dist": 0.8321377800863328
+    },
+    {
+      "adm4_pcode": "PH137401015",
+      "inv_wealth": 0.09841287756756634,
+      "low_health_access": 0.8914676795594567,
+      "inv_dist": 0.8520514539057675
+    },
+    {
+      "adm4_pcode": "PH137401016",
+      "inv_wealth": 0.2434706348101603,
+      "low_health_access": 0.9061893952292354,
+      "inv_dist": 0.9004643825844294
+    },
+    {
+      "adm4_pcode": "PH137401017",
+      "inv_wealth": 0.18136092982262575,
+      "low_health_access": 0.5196769326023377,
+      "inv_dist": 0.924634704222651
+    },
+    {
+      "adm4_pcode": "PH137401018",
+      "inv_wealth": 0.0,
+      "low_health_access": 0.8946071587021022,
+      "inv_dist": 0.8281567236898546
+    },
+    {
+      "adm4_pcode": "PH137401019",
+      "inv_wealth": 0.129592160463881,
+      "low_health_access": 0.8662071415838282,
+      "inv_dist": 0.8667465840631383
+    },
+    {
+      "adm4_pcode": "PH137401020",
+      "inv_wealth": 0.10856015114172246,
+      "low_health_access": 0.8871072405475672,
+      "inv_dist": 0.854710771081308
+    },
+    {
+      "adm4_pcode": "PH137401021",
+      "inv_wealth": 0.07111778737915442,
+      "low_health_access": 0.8584874978614985,
+      "inv_dist": 0.8834642230846352
+    },
+    {
+      "adm4_pcode": "PH137401022",
+      "inv_wealth": 0.2188937748962183,
+      "low_health_access": 0.5854351197401716,
+      "inv_dist": 0.8624495157679046
+    },
+    {
+      "adm4_pcode": "PH137401023",
+      "inv_wealth": 0.0648753323601472,
+      "low_health_access": 0.9300043216458008,
+      "inv_dist": 0.9433561979820162
+    },
+    {
+      "adm4_pcode": "PH137401024",
+      "inv_wealth": 0.08089360798710077,
+      "low_health_access": 0.869859347927175,
+      "inv_dist": 0.8698312053964639
+    },
+    {
+      "adm4_pcode": "PH137401025",
+      "inv_wealth": 0.21796305585918674,
+      "low_health_access": 0.963705051317363,
+      "inv_dist": 0.8611473556287912
+    },
+    {
+      "adm4_pcode": "PH137401026",
+      "inv_wealth": 0.21246898258021396,
+      "low_health_access": 0.915449375732055,
+      "inv_dist": 0.8288155174393701
+    },
+    {
+      "adm4_pcode": "PH137401027",
+      "inv_wealth": 0.22824914069853142,
+      "low_health_access": 0.8398810218378067,
+      "inv_dist": 1.0
+    },
+    {
+      "adm4_pcode": "PH137503001",
+      "inv_wealth": 0.2964406560305508,
+      "low_health_access": 0.9210192803284655,
+      "inv_dist": 0.8103661084207427
+    },
+    {
+      "adm4_pcode": "PH137503002",
+      "inv_wealth": 0.656155174434284,
+      "low_health_access": 0.9533398748128714,
+      "inv_dist": 0.8049050996855378
+    },
+    {
+      "adm4_pcode": "PH137503003",
+      "inv_wealth": 0.778836692852523,
+      "low_health_access": 0.9705373773100561,
+      "inv_dist": 0.8110565024062648
+    },
+    {
+      "adm4_pcode": "PH137503004",
+      "inv_wealth": 0.6331593704126557,
+      "low_health_access": 0.890496515127864,
+      "inv_dist": 0.80771771774684
+    },
+    {
+      "adm4_pcode": "PH137503005",
+      "inv_wealth": 0.6759153221339393,
+      "low_health_access": 0.877142824595265,
+      "inv_dist": 0.8194473694849815
+    },
+    {
+      "adm4_pcode": "PH137503006",
+      "inv_wealth": 0.41079213874241427,
+      "low_health_access": 0.9780886092356782,
+      "inv_dist": 0.8192434614370772
+    },
+    {
+      "adm4_pcode": "PH137503007",
+      "inv_wealth": 0.7993414336376978,
+      "low_health_access": 0.9816927858892875,
+      "inv_dist": 0.8025087509101549
+    },
+    {
+      "adm4_pcode": "PH137503008",
+      "inv_wealth": 0.8508985671527247,
+      "low_health_access": 0.8823726215169109,
+      "inv_dist": 0.781493353567372
+    },
+    {
+      "adm4_pcode": "PH137503009",
+      "inv_wealth": 0.6522082125345352,
+      "low_health_access": 0.2590997532526004,
+      "inv_dist": 0.7754467390974842
+    },
+    {
+      "adm4_pcode": "PH137503010",
+      "inv_wealth": 0.46042185207515285,
+      "low_health_access": 0.6399375285625276,
+      "inv_dist": 0.8102178613418864
+    },
+    {
+      "adm4_pcode": "PH137503011",
+      "inv_wealth": 0.4615845809892507,
+      "low_health_access": 0.5817457622265578,
+      "inv_dist": 0.8237063547235088
+    },
+    {
+      "adm4_pcode": "PH137503012",
+      "inv_wealth": 0.772676675979802,
+      "low_health_access": 0.8339331400035693,
+      "inv_dist": 0.8222715204119044
+    },
+    {
+      "adm4_pcode": "PH137503013",
+      "inv_wealth": 0.7507272239359382,
+      "low_health_access": 0.6453046411356024,
+      "inv_dist": 0.8143470762961051
+    },
+    {
+      "adm4_pcode": "PH137503014",
+      "inv_wealth": 1.0,
+      "low_health_access": 0.6627632281000777,
+      "inv_dist": 0.8321377800863328
+    },
+    {
+      "adm4_pcode": "PH137603001",
+      "inv_wealth": 0.4026776385613089,
+      "low_health_access": 0.40254616879582894,
+      "inv_dist": 0.22933109135661667
+    },
+    {
+      "adm4_pcode": "PH137603002",
+      "inv_wealth": 0.36126296096277644,
+      "low_health_access": 0.7168708287676905,
+      "inv_dist": 0.20281736873581302
+    },
+    {
+      "adm4_pcode": "PH137603003",
+      "inv_wealth": 0.7053136043266197,
+      "low_health_access": 0.9360485707421398,
+      "inv_dist": 0.35015051337446756
+    },
+    {
+      "adm4_pcode": "PH137603004",
+      "inv_wealth": 0.22762537135381455,
+      "low_health_access": 0.37464800035878587,
+      "inv_dist": 0.2686984159583279
+    },
+    {
+      "adm4_pcode": "PH137603005",
+      "inv_wealth": 0.5459193712212533,
+      "low_health_access": 0.0,
+      "inv_dist": 0.05136039275231141
+    },
+    {
+      "adm4_pcode": "PH137603006",
+      "inv_wealth": 0.2082750267320197,
+      "low_health_access": 0.08973803601467291,
+      "inv_dist": 0.14317895000718117
+    },
+    {
+      "adm4_pcode": "PH137603007",
+      "inv_wealth": 0.42768891865059544,
+      "low_health_access": 0.5254634839402776,
+      "inv_dist": 0.40085301860866807
+    },
+    {
+      "adm4_pcode": "PH137603008",
+      "inv_wealth": 0.5415804598488236,
+      "low_health_access": 0.4189260376645132,
+      "inv_dist": 0.0
+    },
+    {
+      "adm4_pcode": "PH137603009",
+      "inv_wealth": 0.2632954986809124,
+      "low_health_access": 0.6652539985486411,
+      "inv_dist": 0.12280937594237962
     }
   ]
 }
