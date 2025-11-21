@@ -1173,7 +1173,36 @@ export const Home = (): JSX.Element => {
               >
                 I want to focus on this barangay
               </Button>
-            )}
+              )}
+              {/* Co-responder action: show a small request button under main respondent when enabled for this barangay */}
+              {currentBarangayClaim?.claimed && selectedBarangay && (() => {
+                try {
+                  const raw = localStorage.getItem(`co_responder_${selectedBarangay}`);
+                  if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed && parsed.enabled) {
+                      const qty = typeof parsed.qty === 'number' ? parsed.qty : 1;
+                      return (
+                        <div className="mt-2 flex justify-center">
+                          <button
+                            onClick={() => {
+                              try {
+                                const key = `co_request_sent_${selectedBarangay}`;
+                                localStorage.setItem(key, JSON.stringify({ qty, ts: Date.now() }));
+                              } catch {}
+                              alert(`Backup requested (${qty} co-responders).`);
+                            }}
+                            className="text-sm bg-yellow-600 text-white px-3 py-1 rounded-md"
+                          >
+                            Request backup ({qty})
+                          </button>
+                        </div>
+                      );
+                    }
+                  }
+                } catch (e) {}
+                return null;
+              })()}
             <div className="mt-2 text-sm text-gray-600">
               {selectedBarangay ? (
                 <span>Selected: {selectedBarangay}</span>
