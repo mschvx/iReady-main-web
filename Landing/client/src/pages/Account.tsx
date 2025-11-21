@@ -685,7 +685,7 @@ export const Account = (): JSX.Element => {
                      </div>
 
                      <div className="space-y-2 max-h-40 overflow-y-auto">
-                       {items.length === 0 ? (
+                         {items.length === 0 ? (
                          <div className="text-sm text-gray-500 text-center">No items yet. Add a task and quantity.</div>
                        ) : (
                          items.map((it) => (
@@ -704,6 +704,11 @@ export const Account = (): JSX.Element => {
                              />
                              <button onClick={() => deleteItem(it.id)} className="text-red-600 px-2">Remove</button>
                            </div>
+                         ))
+                       )}
+                     </div>
+                   </div>
+                 </div>
                </div>
             </section>
           </div>

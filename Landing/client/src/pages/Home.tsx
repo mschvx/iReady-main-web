@@ -617,7 +617,7 @@ export const Home = (): JSX.Element => {
     })();
 
 
-    // fetch all Navotas POIs (used to place accurate markers). We'll use these
+    // fetch all  POIs (used to place accurate markers). We'll use these
     // POIs as anchors to scatter our 50 circles on land (we filter out POIs that
     // look like water to avoid placing circles in the bay/sea).
     (async () => {
