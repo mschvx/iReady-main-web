@@ -181,3 +181,10 @@ The following is an extracted and slightly annotated view of the repository stru
 ### 🏆 Acknowledgment
 
 Developed as part of the **Philippine Junior Data Science Challenge (PJDSC) 2025**.
+
+### 🌲 How to Open the Website
+1. Download the codebase and extract
+2. Open terminal and `cd` to folder `Landing`
+3. Type `npm install` if not installed prior to downloading
+4. Type `npm run dev` to open the localhost website
+
