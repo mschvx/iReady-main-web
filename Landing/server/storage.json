@@ -1,0 +1,18 @@
+{
+  "users": [
+    {
+      "username": "1",
+      "password": "$2a$10$S.n1vhvedargpFpaqnajKeKWwB0vNFHSvQAm4OsCHOk1zSl02.Iq2",
+      "id": "1618292c-cc56-4913-8dc1-855b61f9c101"
+    }
+  ],
+  "barangayClaims": [
+    {
+      "barangayCode": "PH137503007",
+      "userId": "1618292c-cc56-4913-8dc1-855b61f9c101",
+      "username": "1",
+      "claimedAt": 1763739410739
+    }
+  ],
+  "userProfiles": []
+}

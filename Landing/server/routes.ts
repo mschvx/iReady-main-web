@@ -287,6 +287,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Barangay code is required" });
       }
 
+      // Prevent the same user from claiming more than one barangay
+      const existingClaims = await storage.getAllClaims();
+      const userExisting = existingClaims.find(c => c.userId === userId);
+      if (userExisting) {
+        return res.status(409).json({ message: "User already has a claimed barangay", claimedBarangay: userExisting.barangayCode });
+      }
+
       const claim = await storage.claimBarangay(barangayCode, userId, user.username);
       if (!claim) {
         return res.status(409).json({ message: "Barangay already claimed by another user" });

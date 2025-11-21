@@ -39,6 +39,8 @@ export const Account = (): JSX.Element => {
 
   // Prediction data for current barangay
   const [currentPrediction, setCurrentPrediction] = useState<any>(null);
+  // risk predictions map loaded from public CSV (same source Home.tsx uses)
+  const [riskMap, setRiskMap] = useState<Record<string, { level: number; confidence: number; proxy?: number }>>({});
   // Simple checklist items (per-barangay) - editable list with quantity
   interface SimpleItem {
     id: string;
@@ -72,6 +74,10 @@ export const Account = (): JSX.Element => {
   const [editSocialList, setEditSocialList] = useState<Array<{name: string, link: string}>>([]);
   const [editEmail, setEditEmail] = useState<string>("");
   const [editPhone, setEditPhone] = useState<string>("");
+
+  // controlled inputs for checklist add box (improves UX over direct DOM access)
+  const [newItemText, setNewItemText] = useState<string>("");
+  const [newItemQty, setNewItemQty] = useState<number>(1);
 
   // Checklist add item modal state
   // (old priority-based checklist modal removed; using simple per-barangay items)
@@ -138,6 +144,90 @@ export const Account = (): JSX.Element => {
     // localStorage.removeItem("contact_phone");
     // localStorage.removeItem("contact_socials_links");
   }, [user]);
+
+  // Periodically refresh barangay claims so Account stays in sync with server-side state
+  useEffect(() => {
+    let mounted = true;
+    let intervalId: any = null;
+    const refresh = async () => {
+      try {
+        const resp = await fetch('/api/barangay/claims', { credentials: 'include' });
+        if (!mounted || !resp.ok) return;
+        const d = await resp.json();
+        const claimsMap: Record<string, string> = {};
+        (d.claims || []).forEach((c: any) => (claimsMap[c.barangayCode] = c.username));
+        setBarangayClaims(claimsMap);
+
+        // re-evaluate focused barangay blocking
+        const currentBarangay = barangayHistory[0]?.code;
+        if (currentBarangay) {
+          const claimant = claimsMap[currentBarangay];
+          if (claimant && claimant !== (user?.username || null)) {
+            setCurrentPrediction(null);
+            setItems([]);
+            setBlockedClaimant(claimant);
+          } else {
+            setBlockedClaimant(null);
+          }
+        }
+      } catch (e) {
+        // ignore transient errors
+      }
+    };
+
+    // initial refresh
+    refresh();
+    // poll every 20s
+    intervalId = setInterval(refresh, 20000);
+
+    return () => {
+      mounted = false;
+      try { if (intervalId) clearInterval(intervalId); } catch {}
+    };
+  }, [user, barangayHistory]);
+
+  // load risk predictions CSV from public data (same approach as Home.tsx)
+  useEffect(() => {
+    (async () => {
+      try {
+        const resp = await fetch('/data/risk_predictions.csv');
+        if (!resp.ok) return;
+        const txt = await resp.text();
+        const lines = txt.split(/\r?\n/).filter(Boolean);
+        const map: Record<string, { level: number; confidence: number; proxy?: number }> = {};
+        for (let i = 1; i < lines.length; i++) {
+          const row = lines[i].trim();
+          if (!row) continue;
+          const parts = row.split(',');
+          const code = parts[0].replace(/^"|"$/g, '').trim();
+          const proxy = parts[1] ? Number(parts[1]) : NaN;
+          const level = parts[2] ? Number(parts[2]) : NaN;
+          const conf = parts[3] ? Number(parts[3]) : NaN;
+          if (code) map[code] = { level: Number.isFinite(level) ? level : 0, confidence: Number.isFinite(conf) ? conf : 0, proxy: Number.isFinite(proxy) ? proxy : undefined };
+        }
+        setRiskMap(map);
+      } catch (err) {
+        // ignore
+      }
+    })();
+  }, []);
+
+  // whenever the focused barangay or riskMap updates, merge riskMap values into currentPrediction
+  useEffect(() => {
+    const currentBarangay = barangayHistory[0]?.code;
+    if (!currentBarangay) return;
+    const rm = riskMap[currentBarangay] || riskMap[currentBarangay.toUpperCase()];
+    if (!rm) return;
+    setCurrentPrediction((prev: any) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        proxy_risk_score: typeof rm.proxy === 'number' ? rm.proxy : prev.proxy_risk_score,
+        predicted_risk_level: typeof rm.level === 'number' ? rm.level : prev.predicted_risk_level,
+        predicted_risk_confidence: typeof rm.confidence === 'number' ? rm.confidence : prev.predicted_risk_confidence,
+      };
+    });
+  }, [riskMap, barangayHistory]);
 
   useEffect(() => {
     // Load prediction data and barangay history, then fetch claims so we can avoid showing a barangay
@@ -207,7 +297,18 @@ export const Account = (): JSX.Element => {
 
                   // Set prediction data
                   const prediction = data.find((p: any) => p.adm4_pcode === currentBarangay);
-                  setCurrentPrediction(prediction || null);
+                  let merged = prediction || null;
+                  // If we already have a riskMap entry for this barangay, merge its fields
+                  const rm = riskMap[currentBarangay] || riskMap[currentBarangay?.toUpperCase() || ''];
+                  if (merged && rm) {
+                    merged = {
+                      ...merged,
+                      proxy_risk_score: typeof rm.proxy === 'number' ? rm.proxy : merged.proxy_risk_score,
+                      predicted_risk_level: typeof rm.level === 'number' ? rm.level : merged.predicted_risk_level,
+                      predicted_risk_confidence: typeof rm.confidence === 'number' ? rm.confidence : merged.predicted_risk_confidence,
+                    };
+                  }
+                  setCurrentPrediction(merged);
                 }
               }
             }
@@ -344,6 +445,7 @@ export const Account = (): JSX.Element => {
     setEmail("");
     setPhone("");
     setSocialLinks([]);
+    try { sessionStorage.removeItem('selected_barangay'); } catch (e) {}
 
     // Navigate to login
     setLocation("/login");
@@ -415,7 +517,7 @@ export const Account = (): JSX.Element => {
   }
 
   return (
-    <div className="bg-white w-full min-h-screen overflow-hidden">
+    <div className="bg-white w-full min-h-screen">
       {/* Header copied from FirstPage (logo on left, fixed) */}
       <header className="fixed top-0 left-0 w-full h-18 md:h-20 lg:h-24 z-[4000] bg-black shadow-none border-b-0 flex items-center">
         <div className="pl-4 md:pl-6 lg:pl-8">
@@ -444,7 +546,7 @@ export const Account = (): JSX.Element => {
                                         */}
       <main className="pt-16 md:pt-20 lg:pt-24 px-6">
         {/* centered two-column group: narrower max-width so it visually centers, and vertically centered */}
-        <div className="max-w-7xl mx-auto h-[calc(100vh-6rem)] flex items-center justify-center">
+        <div className="max-w-7xl mx-auto min-h-[calc(100vh-6rem)] flex items-start justify-center py-8">
           <div className="grid gap-4 place-items-center min-h-full w-full max-w-7xl
                           grid-cols-1
                           md:[grid-template-columns:minmax(240px,360px)_minmax(0,3fr)]">
@@ -487,11 +589,19 @@ export const Account = (): JSX.Element => {
                     <div className="text-xs font-medium text-gray-700">Barangays Helped</div>
                     <div className="text-xs text-gray-600 mt-1 whitespace-pre-wrap max-h-20 overflow-y-auto">
                       {(() => {
-                        const myBarangays = barangayHistory.filter(item => barangayClaims[item.code] === username);
+                        // Only show unique barangay codes (preserve first occurrence order)
+                        const filtered = barangayHistory.filter(item => barangayClaims[item.code] === username);
+                        const seen = new Set<string>();
+                        const myBarangays = filtered.filter((b) => {
+                          if (seen.has(b.code)) return false;
+                          seen.add(b.code);
+                          return true;
+                        });
+
                         return myBarangays.length > 0 ? (
                           <div className="space-y-1">
                             {myBarangays.slice(0, 3).map((item, idx) => (
-                              <div key={idx} className="flex items-center gap-1 text-xs">
+                              <div key={item.code} className="flex items-center gap-1 text-xs">
                                 <button
                                   onClick={() => setLocation(`/home?barangay=${encodeURIComponent(item.code)}`)}
                                   className="text-blue-600 hover:underline"
@@ -559,35 +669,52 @@ export const Account = (): JSX.Element => {
             <section className="col-span-1 w-full bg-gray-100 rounded-2xl p-6 shadow-md text-center justify-self-center">
               <h2 className="text-3xl md:text-4xl font-bold mb-3">Current Barangay Focus</h2>
 
-               {barangayHistory.length > 0 ? (
-                 <>
-                   <div className="mb-2">
-                     <button
-                       onClick={() => setLocation(`/home?barangay=${encodeURIComponent(barangayHistory[0].code)}`)}
-                       className="text-blue-600 inline-flex items-center text-lg md:text-xl font-bold underline hover:text-blue-800"
-                     >
-                       ↗&nbsp; {barangayHistory[0].code}
-                     </button>
-                   </div>
-    
-                   
-                   
-                   <div className="text-xs text-gray-500 mb-2">
-                     Last updated: {new Date(barangayHistory[0].timestamp).toLocaleDateString()}
-                   </div>
-                  {blockedClaimant && (
-                    <div className="max-w-3xl mx-auto mb-4">
-                      <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
-                        This barangay is currently claimed by <span className="font-semibold">{blockedClaimant}</span>. You cannot manage it here.
-                      </div>
+              {(() => {
+                // Prefer an explicit session selection created during this browser session.
+                let focusedBarangay: string | null = null;
+                try {
+                  if (typeof window !== 'undefined' && window.sessionStorage) {
+                    const s = sessionStorage.getItem('selected_barangay');
+                    if (s) focusedBarangay = s;
+                  }
+                } catch (e) {
+                  // ignore
+                }
+
+                // If there's no session selection, show no selection. This avoids showing old
+                // localStorage history entries as if the user had actively picked them this session.
+                if (!focusedBarangay) {
+                  return (
+                    <div className="text-base text-gray-500 mb-3">None chosen yet! Visit the Home page to select one.</div>
+                  );
+                }
+
+                // Determine timestamp for display if present in history
+                const mostRecent = barangayHistory.find(h => h.code === focusedBarangay) || null;
+                return (
+                  <>
+                    <div className="mb-2">
+                      <button
+                        onClick={() => setLocation(`/home?barangay=${encodeURIComponent(focusedBarangay || '')}`)}
+                        className="text-blue-600 inline-flex items-center text-lg md:text-xl font-bold underline hover:text-blue-800"
+                      >
+                        ↗&nbsp; {focusedBarangay}
+                      </button>
                     </div>
-                  )}
-                 </>
-               ) : (
-                 <div className="text-base text-gray-500 mb-3">
-                   No barangay focused yet. Visit the Home page to select one.
-                 </div>
-               )}
+
+                    {mostRecent ? (
+                      <div className="text-xs text-gray-500 mb-2">Last updated: {new Date(mostRecent.timestamp).toLocaleDateString()}</div>
+                    ) : null}
+                    {blockedClaimant && (
+                      <div className="max-w-3xl mx-auto mb-4">
+                        <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+                          This barangay is currently claimed by <span className="font-semibold">{blockedClaimant}</span>. You cannot manage it here.
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
  
                <div className="mt-2">
                  <div className="mb-4 max-w-3xl mx-auto">
@@ -664,32 +791,61 @@ export const Account = (): JSX.Element => {
                    </div>
                  </div>
 
-                 <div className="bg-white rounded-2xl border-4 border-blue-300 p-4 shadow-inner flex flex-col md:h-56 overflow-hidden">
+                 <div className="bg-white rounded-2xl border-4 border-blue-300 p-4 shadow-inner flex flex-col h-[210px] overflow-hidden">
                    <h3 className="text-xl font-semibold mb-2 text-center">Checklist</h3>
-                   <div className="max-w-2xl mx-auto w-full">
-                     <div className="flex gap-2 mb-3">
-                       <input type="text" placeholder="Item description" className="flex-1 rounded-md border p-2 text-sm" id="new-item-text" />
-                       <input type="number" min={1} defaultValue={1} className="w-20 rounded-md border p-2 text-sm" id="new-item-qty" />
-                       <button
-                         onClick={() => {
-                           const txt = (document.getElementById('new-item-text') as HTMLInputElement)?.value || '';
-                           const q = parseInt((document.getElementById('new-item-qty') as HTMLInputElement)?.value || '1', 10) || 1;
-                           if (txt.trim()) {
-                             addItem(txt, q);
-                             (document.getElementById('new-item-text') as HTMLInputElement).value = '';
-                             (document.getElementById('new-item-qty') as HTMLInputElement).value = '1';
-                           }
-                         }}
-                         className="px-3 py-2 bg-blue-600 text-white rounded-md text-sm"
-                       >Add</button>
-                     </div>
+                   <div className="max-w-2xl mx-auto w-full flex flex-col h-full">
+                      <div className="flex gap-2 mb-3">
+                        <input
+                          type="text"
+                          placeholder="Item description"
+                          className="flex-1 rounded-md border p-2 text-sm"
+                          value={newItemText}
+                          onChange={(e) => setNewItemText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              const txt = newItemText || '';
+                              const q = Number(newItemQty) || 1;
+                              if (txt.trim()) {
+                                addItem(txt, q);
+                                setNewItemText('');
+                                setNewItemQty(1);
+                              }
+                            }
+                          }}
+                          aria-label="New checklist item description"
+                        />
+                        <input
+                          type="number"
+                          min={1}
+                          value={newItemQty}
+                          onChange={(e) => setNewItemQty(Math.max(1, parseInt(e.target.value || '1', 10) || 1))}
+                          className="w-20 rounded-md border p-2 text-sm"
+                          aria-label="New checklist item quantity"
+                        />
+                        <button
+                          onClick={() => {
+                            const txt = newItemText || '';
+                            const q = Number(newItemQty) || 1;
+                            if (txt.trim()) {
+                              addItem(txt, q);
+                              setNewItemText('');
+                              setNewItemQty(1);
+                            }
+                          }}
+                          disabled={!newItemText.trim()}
+                          className="px-3 py-2 bg-blue-600 text-white rounded-md text-sm disabled:opacity-50"
+                        >Add</button>
+                      </div>
 
-                     <div className="space-y-2 max-h-40 overflow-y-auto">
+                      <div className="space-y-2 overflow-y-auto flex-1 px-1">
                          {items.length === 0 ? (
                          <div className="text-sm text-gray-500 text-center">No items yet. Add a task and quantity.</div>
                        ) : (
-                         items.map((it) => (
-                           <div key={it.id} className="flex items-center gap-2 p-2 border rounded-md">
+                        <>
+                          <div className="text-xs text-gray-500 mb-2">Items: {items.length}</div>
+                          {items.map((it) => (
+                            <div key={it.id} className="flex items-center gap-2 p-2 border rounded-md">
                              <input
                                value={it.text}
                                onChange={(e) => updateItem(it.id, { text: e.target.value })}
@@ -704,7 +860,8 @@ export const Account = (): JSX.Element => {
                              />
                              <button onClick={() => deleteItem(it.id)} className="text-red-600 px-2">Remove</button>
                            </div>
-                         ))
+                          ))}
+                        </>
                        )}
                      </div>
                    </div>

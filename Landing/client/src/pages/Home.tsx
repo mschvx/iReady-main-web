@@ -446,6 +446,13 @@ export const Home = (): JSX.Element => {
     computeExplain(selectedBarangay);
   }, [selectedBarangay, toReceiveData, riskMap, riskModelMeta]);
 
+  // NOTE: Do NOT persist `selected_barangay` to sessionStorage on every selection.
+  // Persisting on search or simple selection caused Account to display the
+  // searched barangay as the user's focused barangay even when they didn't
+  // actually claim it. We now only write `sessionStorage.selected_barangay`
+  // when a claim is successfully performed (see claim handler) so Account
+  // reflects only explicit user claims.
+
   // Load typhoon GeoJSON and barangay CSV from frontend `public/data/`.
   // These populate `typhoonTrack` and `brgyPoints` state respectively.
   useEffect(() => {
@@ -1400,20 +1407,29 @@ export const Home = (): JSX.Element => {
                     alert("Please select a barangay first by searching for it.");
                     return;
                   }
-                  
-                  // Check if user has already claimed a barangay
+
+                  // Refresh latest claims from server to ensure we have the most
+                  // up-to-date info before attempting a new claim. This prevents
+                  // a stale client state from allowing duplicate claims.
+                  try {
+                    await loadBarangayClaims();
+                  } catch (e) {
+                    // ignore load errors and continue (server may be temporarily unreachable)
+                  }
+
+                  // Check if user has already claimed a barangay (using refreshed state)
                   const userClaimedBarangay = Object.entries(barangayClaims).find(
                     ([_, claimant]) => claimant === user?.username
                   );
-                  
+
                   if (userClaimedBarangay) {
                     // Show error modal if user already has a claim
                     setShowClaimLimitModal(true);
                     return;
                   }
-                  
+
                   console.log("Attempting to claim barangay:", selectedBarangay);
-                  
+
                   try {
                     const response = await fetch("/api/barangay/claim", {
                       method: "POST",
@@ -1427,9 +1443,9 @@ export const Home = (): JSX.Element => {
                     console.log("Claim response status:", response.status);
 
                     if (response.ok) {
-                      const data = await response.json();
+                      const data = await response.json().catch(() => ({}));
                       console.log("Claim successful:", data);
-                      
+
                       // Update local state
                       setFocusedByUser(true);
                       setCurrentBarangayClaim({
@@ -1458,7 +1474,7 @@ export const Home = (): JSX.Element => {
                         flyToWithOffset(lat, lon, 18, [0, -120]);
                       }
 
-                      // Save to history in localStorage
+                      // Save to history in localStorage only if server confirms the claim
                       try {
                         const historyKey = "barangay_history";
                         const existing = localStorage.getItem(historyKey);
@@ -1466,20 +1482,31 @@ export const Home = (): JSX.Element => {
                         if (existing) {
                           history = JSON.parse(existing);
                         }
-                        // Add new entry if not already the most recent
-                        if (history.length === 0 || history[0].code !== selectedBarangay) {
+                        // Add new entry if not already present (ensure uniqueness)
+                        const already = history.some(h => h.code === selectedBarangay);
+                        if (!already) {
                           history.unshift({ code: selectedBarangay, timestamp: Date.now() });
                           // Keep only the last 20 entries
                           history = history.slice(0, 20);
                           localStorage.setItem(historyKey, JSON.stringify(history));
+                          try { sessionStorage.setItem('selected_barangay', selectedBarangay); } catch (e) {}
                         }
                       } catch (err) {
                         console.error("Failed to save barangay history:", err);
                       }
+                      // Refresh claims from server to ensure consistency
+                      try { await loadBarangayClaims(); } catch (e) {}
                     } else if (response.status === 409) {
                       const errorData = await response.json().catch(() => ({}));
-                      alert("This barangay has already been claimed by another user.");
+                      // If server indicates the user already has a claim, show claim limit modal
+                      if (errorData && typeof errorData.message === 'string' && errorData.message.toLowerCase().includes('user already')) {
+                        setShowClaimLimitModal(true);
+                      } else {
+                        alert("This barangay has already been claimed by another user.");
+                      }
                       console.error("Claim conflict:", errorData);
+                      // Ensure local claims reflect server truth
+                      try { await loadBarangayClaims(); } catch (e) {}
                     } else if (response.status === 401) {
                       alert("You must be logged in to claim a barangay.");
                     } else {

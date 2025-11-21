@@ -1,5 +1,7 @@
 import { type User, type InsertUser } from "@shared/schema";
 import { randomUUID } from "crypto";
+import fs from 'fs';
+import path from 'path';
 
 // modify the interface with any CRUD methods
 // you might need
@@ -36,13 +38,56 @@ export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private barangayClaims: Map<string, BarangayClaim>;
   private userProfiles: Map<string, UserProfile>;
+  private storageFile: string;
 
   constructor() {
     this.users = new Map();
     this.barangayClaims = new Map();
     this.userProfiles = new Map();
+    // Persist storage to a JSON file next to this module so data survives restarts
+    // Use process.cwd() to avoid relying on __dirname in ESM mode
+    this.storageFile = path.resolve(process.cwd(), 'server', 'storage.json');
+    this.loadFromDisk();
+    }
+
+
+  private loadFromDisk() {
+    try {
+      if (!fs.existsSync(this.storageFile)) return;
+      const raw = fs.readFileSync(this.storageFile, 'utf-8');
+      const parsed = JSON.parse(raw || '{}');
+      if (parsed.users && Array.isArray(parsed.users)) {
+        for (const u of parsed.users) {
+          this.users.set(u.id, u as User);
+        }
+      }
+      if (parsed.barangayClaims && Array.isArray(parsed.barangayClaims)) {
+        for (const c of parsed.barangayClaims) {
+          this.barangayClaims.set(c.barangayCode, c as BarangayClaim);
+        }
+      }
+      if (parsed.userProfiles && Array.isArray(parsed.userProfiles)) {
+        for (const p of parsed.userProfiles) {
+          this.userProfiles.set(p.username.toLowerCase(), p as UserProfile);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load storage from disk:', err);
+    }
   }
 
+  private saveToDisk() {
+    try {
+      const obj = {
+        users: Array.from(this.users.values()),
+        barangayClaims: Array.from(this.barangayClaims.values()),
+        userProfiles: Array.from(this.userProfiles.values()),
+      };
+      fs.writeFileSync(this.storageFile, JSON.stringify(obj, null, 2), 'utf-8');
+    } catch (err) {
+      console.error('Failed to persist storage to disk:', err);
+    }
+  }
   async getUser(id: string): Promise<User | undefined> {
     return this.users.get(id);
   }
@@ -57,6 +102,7 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const user: User = { ...insertUser, id };
     this.users.set(id, user);
+    this.saveToDisk();
     return user;
   }
 
@@ -74,6 +120,7 @@ export class MemStorage implements IStorage {
       claimedAt: Date.now(),
     };
     this.barangayClaims.set(barangayCode, claim);
+    this.saveToDisk();
     return claim;
   }
 
@@ -87,6 +134,7 @@ export class MemStorage implements IStorage {
 
   async saveUserProfile(profile: UserProfile): Promise<void> {
     this.userProfiles.set(profile.username.toLowerCase(), profile);
+    this.saveToDisk();
   }
 
   async getUserProfile(username: string): Promise<UserProfile | undefined> {
@@ -97,6 +145,11 @@ export class MemStorage implements IStorage {
     this.users.clear();
     this.barangayClaims.clear();
     this.userProfiles.clear();
+    try {
+      if (fs.existsSync(this.storageFile)) fs.unlinkSync(this.storageFile);
+    } catch (err) {
+      console.error('Failed to remove storage file during reset:', err);
+    }
     console.log("🗑️ All storage data has been reset");
   }
 }
